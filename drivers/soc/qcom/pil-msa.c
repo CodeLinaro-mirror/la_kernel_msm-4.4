@@ -534,10 +534,15 @@ static int pil_mss_reset(struct pil_desc *pil)
 	 * Let's assign this region to MPSS in case MBA will do scribble later
 	 * since no method to know it is cold boot or GVM restart case.
 	 *
-	 * In SSR, MSS region is still owned by modem here. So actually no need
-	 * for this step. So we avoid it.
+	 * In SSR with ramdump collection enabled, MSS region is still owned
+	 * by modem here. So actually no need for this step. So we avoid it.
+	 *
+	 * In SSR without ramdump collection enabled, MBA will try to scribble
+	 * the MSS region when MPSS does not own the MSS region. To address this,
+	 * an additional check is added that will assign the region to MPSS when
+	 * an SSR is occuring and ramdump collection is disabled.
 	 */
-	if (!pil->modem_ssr) {
+	if (!pil->modem_ssr || !pil->ramdump_enabled) {
 		dev_dbg(pil->dev, "assign MSS region to modem\n");
 		pil_modem_assign_memory(pil);
 	}
@@ -556,7 +561,7 @@ static int pil_mss_reset(struct pil_desc *pil)
 	/*
 	 * after MBA boot up, let's assign back mss region to linux
 	 */
-	if (!pil->modem_ssr) {
+	if (!pil->modem_ssr || !pil->ramdump_enabled) {
 		dev_dbg(pil->dev, "free MSS region back to linux\n");
 		pil_modem_free_memory(pil);
 	}

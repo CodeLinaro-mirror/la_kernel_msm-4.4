@@ -39,6 +39,7 @@ struct pil_priv;
  * @modem_ssr: true if modem is in SSR rather than cold boot or GVM restart.
  * @clear_fw_region: Clear fw region on failure in loading.
  * @subsys_vmid: memprot id for the subsystem.
+ * @ramdump_enabled: true if ramdump collection is enabled for the PIL descriptor.
  */
 struct pil_desc {
 	const char *name;
@@ -60,6 +61,7 @@ struct pil_desc {
 	bool modem_ssr;
 	bool clear_fw_region;
 	u32 subsys_vmid;
+	bool ramdump_enabled;
 };
 
 /**

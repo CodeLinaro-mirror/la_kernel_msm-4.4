@@ -163,6 +163,13 @@ static int modem_ramdump(int enable, const struct subsys_desc *subsys)
 	struct modem_data *drv = subsys_to_drv(subsys);
 	int ret;
 
+	/*
+	 * We need to save the ramdump enabled state as it will
+	 * determine if we need to do a hyp_assign of the MPSS PIL
+	 * region before MBA
+	 */
+	drv->q6->desc.ramdump_enabled = enable;
+
 	if (!enable)
 		return 0;
 
@@ -228,6 +235,7 @@ static int pil_subsys_init(struct modem_data *drv,
 	drv->subsys_desc.wdog_bite_handler = modem_wdog_bite_intr_handler;
 
 	drv->q6->desc.modem_ssr = false;
+	drv->q6->desc.ramdump_enabled = true;
 	drv->subsys = subsys_register(&drv->subsys_desc);
 	if (IS_ERR(drv->subsys)) {
 		ret = PTR_ERR(drv->subsys);
