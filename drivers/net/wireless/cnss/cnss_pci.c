@@ -1695,31 +1695,33 @@ static int cnss_wlan_pci_probe(struct pci_dev *pdev,
 		goto err_pcie_suspend;
 	}
 
-	cpu_addr = dma_alloc_coherent(dev, EVICT_BIN_MAX_SIZE,
+	if (!penv->cnss_seg_info) {
+		cpu_addr = dma_alloc_coherent(dev, EVICT_BIN_MAX_SIZE,
 					&dma_handle, GFP_KERNEL);
-	if (!cpu_addr || !dma_handle) {
-		pr_err("cnss: Memory Alloc failed for codeswap feature\n");
-		goto err_pcie_suspend;
-	}
+		if (!cpu_addr || !dma_handle) {
+			pr_err("cnss: Memory Alloc failed for codeswap feature\n");
+			goto err_pcie_suspend;
+		}
 
-	memset(cpu_addr, 0, EVICT_BIN_MAX_SIZE);
-	cnss_seg_info = devm_kzalloc(dev, sizeof(*cnss_seg_info),
+		memset(cpu_addr, 0, EVICT_BIN_MAX_SIZE);
+		cnss_seg_info = devm_kzalloc(dev, sizeof(*cnss_seg_info),
 							GFP_KERNEL);
-	if (!cnss_seg_info) {
-		pr_err("Fail to allocate memory for cnss_seg_info\n");
-		goto end_dma_alloc;
+		if (!cnss_seg_info) {
+			pr_err("Fail to allocate memory for cnss_seg_info\n");
+			goto end_dma_alloc;
+		}
+
+		memset(cnss_seg_info, 0, sizeof(*cnss_seg_info));
+		cnss_seg_info->codeseg_busaddr[0]   = (void *)dma_handle;
+		penv->codeseg_cpuaddr[0]            = cpu_addr;
+		cnss_seg_info->codeseg_size         = EVICT_BIN_MAX_SIZE;
+		cnss_seg_info->codeseg_total_bytes  = EVICT_BIN_MAX_SIZE;
+		cnss_seg_info->num_codesegs         = 1;
+		cnss_seg_info->codeseg_size_log2    = ilog2(EVICT_BIN_MAX_SIZE);
+
+		penv->cnss_seg_info = cnss_seg_info;
+		pr_debug("%s: Successfully allocated memory for CODESWAP\n", __func__);
 	}
-
-	memset(cnss_seg_info, 0, sizeof(*cnss_seg_info));
-	cnss_seg_info->codeseg_busaddr[0]   = (void *)dma_handle;
-	penv->codeseg_cpuaddr[0]            = cpu_addr;
-	cnss_seg_info->codeseg_size         = EVICT_BIN_MAX_SIZE;
-	cnss_seg_info->codeseg_total_bytes  = EVICT_BIN_MAX_SIZE;
-	cnss_seg_info->num_codesegs         = 1;
-	cnss_seg_info->codeseg_size_log2    = ilog2(EVICT_BIN_MAX_SIZE);
-
-	penv->cnss_seg_info = cnss_seg_info;
-	pr_debug("%s: Successfully allocated memory for CODESWAP\n", __func__);
 
 	return ret;
 
@@ -2902,6 +2904,7 @@ static int cnss_probe(struct platform_device *pdev)
 	penv->vreg_info.wlan_reg = NULL;
 	penv->vreg_info.state = VREG_OFF;
 	penv->pci_register_again = false;
+	penv->cnss_seg_info = NULL;
 	mutex_init(&penv->fw_setup_stat_lock);
 
 	ret = cnss_wlan_get_resources(pdev);
