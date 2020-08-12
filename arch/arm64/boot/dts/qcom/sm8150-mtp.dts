@@ -419,6 +419,10 @@
 	vdda-pll-supply = <&vreg_l3c_1p2>;
 };
 
+&pm8150b_vbus {
+	status = "okay";
+};
+
 &usb_1_hsphy {
 	status = "okay";
 	vdda-pll-supply = <&vdd_usb_hs_core>;
