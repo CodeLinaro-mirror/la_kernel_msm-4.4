@@ -18,6 +18,7 @@
 	compatible = "qcom,qrb5165-rb5", "qcom,sm8250";
 
 	aliases {
+		hsuart0 = &uart6;
 		serial0 = &uart12;
 		sdhc2 = &sdhc_2;
 	};
@@ -1190,6 +1191,14 @@
 		pins = "gpio77";
 		function = "gpio";
 		bias-pull-up;
+	};
+};
+
+&uart6 {
+	status = "okay";
+	bluetooth {
+		compatible = "qcom,qca6390-bt";
+		power-domains = <&qca639x>;
 	};
 };
 
