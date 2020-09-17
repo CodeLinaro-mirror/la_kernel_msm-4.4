@@ -74,12 +74,14 @@ void __thermal_cdev_update(struct thermal_cooling_device *cdev);
  * @temperature: temperature value in miliCelsius
  * @hysteresis: relative hysteresis in miliCelsius
  * @type: trip point type
+ * @monitor_type: trip point monitor type
  */
 struct thermal_trip {
 	struct device_node *np;
 	int temperature;
 	int hysteresis;
 	enum thermal_trip_type type;
+	enum thermal_trip_monitor_type monitor_type;
 };
 
 int get_tz_trend(struct thermal_zone_device *tz, int trip);

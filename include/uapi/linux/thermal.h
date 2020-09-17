@@ -16,6 +16,11 @@ enum thermal_trip_type {
 	THERMAL_TRIP_CRITICAL,
 };
 
+enum thermal_trip_monitor_type {
+	THERMAL_TRIP_MONITOR_RISING = 0,
+	THERMAL_TRIP_MONITOR_FALLING
+};
+
 /* Adding event notification support elements */
 #define THERMAL_GENL_FAMILY_NAME		"thermal"
 #define THERMAL_GENL_VERSION			0x01
