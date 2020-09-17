@@ -99,6 +99,18 @@ static void thermal_zone_trip_update(struct thermal_zone_device *tz, int trip)
 static int bang_bang_control(struct thermal_zone_device *tz, int trip)
 {
 	struct thermal_instance *instance;
+	enum thermal_trip_monitor_type monitor_type =
+						THERMAL_TRIP_MONITOR_RISING;
+
+	/*
+	 * Return doing nothing if the trip point is monitored for
+	 * falling temperature
+	 */
+	if (tz->ops->get_trip_mon_type) {
+		tz->ops->get_trip_mon_type(tz, trip, &monitor_type);
+		if (monitor_type == THERMAL_TRIP_MONITOR_FALLING)
+			return 0;
+	}
 
 	thermal_zone_trip_update(tz, trip);
 
