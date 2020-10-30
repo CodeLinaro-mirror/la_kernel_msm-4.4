@@ -20,6 +20,7 @@ enum ipa_version {
 	IPA_VERSION_4_2,	/* GSI version 2.2 */
 	IPA_VERSION_4_5,	/* GSI version 2.5 */
 	IPA_VERSION_4_7,	/* GSI version 2.7 */
+	IPA_VERSION_4_9,	/* GSI version 2.9 */
 };
 
 #endif /* _IPA_VERSION_H_ */

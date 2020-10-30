@@ -275,6 +275,10 @@ static void ipa_hardware_config_qsb(struct ipa *ipa)
 		max0 = 12;
 		max1 = 0;		/* PCIe not present */
 		break;
+	case IPA_VERSION_4_9:
+		max0 = 99;	/* ??? */
+		max1 = 99;	/* ??? */
+		break;
 	}
 	val = u32_encode_bits(max0, GEN_QMB_0_MAX_WRITES_FMASK);
 	val |= u32_encode_bits(max1, GEN_QMB_1_MAX_WRITES_FMASK);
@@ -299,6 +303,10 @@ static void ipa_hardware_config_qsb(struct ipa *ipa)
 	case IPA_VERSION_4_7:
 		max0 = 13;
 		max1 = 0;		/* PCIe not present */
+		break;
+	case IPA_VERSION_4_9:
+		max0 = 99;	/* ??? */
+		max1 = 99;	/* ??? */
 		break;
 	}
 	val = u32_encode_bits(max0, GEN_QMB_0_MAX_READS_FMASK);
