@@ -258,18 +258,25 @@ static void ipa_hardware_config_qsb(struct ipa *ipa)
 	u32 val;
 
 	/* QMB_0 represents DDR; QMB_1 represents PCIe */
-	val = u32_encode_bits(8, GEN_QMB_0_MAX_WRITES_FMASK);
+	max0 = 8;
 	switch (version) {
+	case IPA_VERSION_3_5_1:
+	case IPA_VERSION_4_1:
+	default:
+		max1 = 4;
+		break;
 	case IPA_VERSION_4_2:
 		max1 = 0;		/* PCIe not present */
 		break;
 	case IPA_VERSION_4_5:
 		max1 = 8;
 		break;
-	default:
-		max1 = 4;
+	case IPA_VERSION_4_7:
+		max0 = 12;
+		max1 = 0;		/* PCIe not present */
 		break;
 	}
+	val = u32_encode_bits(max0, GEN_QMB_0_MAX_WRITES_FMASK);
 	val |= u32_encode_bits(max1, GEN_QMB_1_MAX_WRITES_FMASK);
 	iowrite32(val, ipa->reg_virt + IPA_REG_QSB_MAX_WRITES_OFFSET);
 
@@ -288,6 +295,10 @@ static void ipa_hardware_config_qsb(struct ipa *ipa)
 		break;
 	case IPA_VERSION_4_5:
 		max0 = 0;		/* No limit (hardware maximum) */
+		break;
+	case IPA_VERSION_4_7:
+		max0 = 13;
+		max1 = 0;		/* PCIe not present */
 		break;
 	}
 	val = u32_encode_bits(max0, GEN_QMB_0_MAX_READS_FMASK);
