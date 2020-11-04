@@ -17,6 +17,7 @@
 #include "ipa_table.h"
 #include "ipa_cmd.h"
 #include "ipa_mem.h"
+#include "ipa_assert.h"
 
 /**
  * DOC:  IPA Immediate Commands
@@ -652,11 +653,19 @@ void ipa_cmd_pipeline_clear(struct ipa *ipa)
 static struct ipa_cmd_info *
 ipa_cmd_info_alloc(struct ipa_endpoint *endpoint, u32 tre_count)
 {
+	struct ipa *ipa = endpoint->ipa;
 	struct gsi_channel *channel;
+	struct gsi_trans_pool *pool;
+	struct device *dev;
 
 	channel = &endpoint->ipa->gsi.channel[endpoint->channel_id];
+	pool = &channel->trans_info.info_pool;
+	dev = &ipa->pdev->dev;
 
-	return gsi_trans_pool_alloc(&channel->trans_info.info_pool, tre_count);
+	ipa_assert(dev, tre_count > 0);
+	ipa_assert(dev, tre_count <= pool->max_alloc);
+
+	return gsi_trans_pool_alloc(pool, tre_count);
 }
 
 /* Allocate a transaction for the command TX endpoint */
