@@ -226,9 +226,6 @@ void *gsi_trans_pool_next(struct gsi_trans_pool *pool, void *element)
 {
 	void *end = pool->base + pool->count * pool->size;
 
-	/* assert(element >= pool->base); */
-	/* assert(element < end); */
-	/* assert(pool->max_alloc == 1); */
 	element += pool->size;
 
 	return element < end ? element : pool->base;

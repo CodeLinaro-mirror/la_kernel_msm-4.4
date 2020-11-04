@@ -22,6 +22,7 @@
 #include "ipa_gsi.h"
 #include "ipa_data.h"
 #include "ipa_version.h"
+#include "ipa_assert.h"
 
 /**
  * DOC: The IPA Generic Software Interface
@@ -1392,15 +1393,22 @@ static void gsi_evt_ring_rx_update(struct gsi_evt_ring *evt_ring, u32 index)
 {
 	struct gsi_channel *channel = evt_ring->channel;
 	struct gsi_ring *ring = &evt_ring->ring;
+	struct device *dev = channel->gsi->dev;
 	struct gsi_trans_info *trans_info;
 	struct gsi_event *event_done;
+	struct gsi_trans_pool *pool;
 	struct gsi_event *event;
 	struct gsi_trans *trans;
 	u32 byte_count = 0;
-	u32 old_index;
 	u32 event_avail;
+	u32 old_index;
+	void *end;
 
 	trans_info = &channel->trans_info;
+	pool = &trans_info->pool;
+	end = pool->base + pool->count * pool->size;
+	/* We use gsi_trans_pool_next(), which assumes max_alloc is 1 */
+	ipa_assert(dev, pool->max_alloc == 1);
 
 	/* We'll start with the oldest un-processed event.  RX channels
 	 * replenish receive buffers in single-TRE transactions, so we
@@ -1425,7 +1433,11 @@ static void gsi_evt_ring_rx_update(struct gsi_evt_ring *evt_ring, u32 index)
 			event++;
 		else
 			event = gsi_ring_virt(ring, 0);
-		trans = gsi_trans_pool_next(&trans_info->pool, trans);
+
+		ipa_assert(dev, (void *)trans >= pool->base);
+		ipa_assert(dev, (void *)trans < end);
+
+		trans = gsi_trans_pool_next(pool, trans);
 	} while (event != event_done);
 
 	/* We record RX bytes when they are received */
