@@ -2102,8 +2102,10 @@ err_clear_gsi:
 }
 
 /* Inverse of gsi_channel_init_one() */
-static void gsi_channel_exit_one(struct gsi_channel *channel)
+static void gsi_channel_exit_one(struct gsi *gsi, u32 channel_id)
 {
+	struct gsi_channel *channel = &gsi->channel[channel_id];
+
 	if (!gsi_channel_initialized(channel))
 		return;
 
@@ -2157,7 +2159,7 @@ err_unwind:
 			gsi->modem_channel_bitmap &= ~BIT(data[i].channel_id);
 			continue;
 		}
-		gsi_channel_exit_one(&gsi->channel[data->channel_id]);
+		gsi_channel_exit_one(gsi, data->channel_id);
 	}
 	gsi_evt_ring_exit(gsi);
 
@@ -2170,7 +2172,7 @@ static void gsi_channel_exit(struct gsi *gsi)
 	u32 channel_id = GSI_CHANNEL_COUNT_MAX - 1;
 
 	do
-		gsi_channel_exit_one(&gsi->channel[channel_id]);
+		gsi_channel_exit_one(gsi, channel_id);
 	while (channel_id--);
 	gsi->modem_channel_bitmap = 0;
 
