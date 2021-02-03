@@ -1242,7 +1242,7 @@ static int venc_probe(struct platform_device *pdev)
 		return -EPROBE_DEFER;
 
 	core = dev_get_drvdata(dev->parent);
-	if (!core)
+	if (!core || !core->v4l2_dev)
 		return -EPROBE_DEFER;
 
 	platform_set_drvdata(pdev, core);
@@ -1262,7 +1262,7 @@ static int venc_probe(struct platform_device *pdev)
 	vdev->fops = &venc_fops;
 	vdev->ioctl_ops = &venc_ioctl_ops;
 	vdev->vfl_dir = VFL_DIR_M2M;
-	vdev->v4l2_dev = &core->v4l2_dev;
+	vdev->v4l2_dev = core->v4l2_dev;
 	vdev->device_caps = V4L2_CAP_VIDEO_M2M_MPLANE | V4L2_CAP_STREAMING;
 
 	ret = video_register_device(vdev, VFL_TYPE_VIDEO, -1);

@@ -231,12 +231,17 @@ static void venus_assign_register_offsets(struct venus_core *core)
 static int venus_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
+	struct v4l2_device *v4l2_dev;
 	struct venus_core *core;
 	struct resource *r;
 	int ret;
 
 	core = devm_kzalloc(dev, sizeof(*core), GFP_KERNEL);
 	if (!core)
+		return -ENOMEM;
+
+	v4l2_dev = devm_kzalloc(dev, sizeof(*v4l2_dev), GFP_KERNEL);
+	if (!v4l2_dev)
 		return -ENOMEM;
 
 	core->dev = dev;
@@ -331,9 +336,11 @@ static int venus_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_venus_shutdown;
 
-	ret = v4l2_device_register(dev, &core->v4l2_dev);
+	ret = v4l2_device_register(dev, v4l2_dev);
 	if (ret)
 		goto err_core_deinit;
+
+	core->v4l2_dev = v4l2_dev;
 
 	ret = pm_runtime_put_sync(dev);
 	if (ret) {
@@ -346,7 +353,7 @@ static int venus_probe(struct platform_device *pdev)
 	return 0;
 
 err_dev_unregister:
-	v4l2_device_unregister(&core->v4l2_dev);
+	v4l2_device_unregister(core->v4l2_dev);
 err_core_deinit:
 	hfi_core_deinit(core, false);
 err_venus_shutdown:
@@ -391,7 +398,8 @@ static int venus_remove(struct platform_device *pdev)
 	icc_put(core->video_path);
 	icc_put(core->cpucfg_path);
 
-	v4l2_device_unregister(&core->v4l2_dev);
+	v4l2_device_unregister(core->v4l2_dev);
+
 	mutex_destroy(&core->pm_lock);
 	mutex_destroy(&core->lock);
 	venus_dbgfs_deinit(core);

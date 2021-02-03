@@ -150,7 +150,7 @@ struct venus_core {
 	struct reset_control *resets[VIDC_RESETS_NUM_MAX];
 	struct video_device *vdev_dec;
 	struct video_device *vdev_enc;
-	struct v4l2_device v4l2_dev;
+	struct v4l2_device *v4l2_dev;
 	const struct venus_resources *res;
 	struct device *dev;
 	struct device *dev_dec;
