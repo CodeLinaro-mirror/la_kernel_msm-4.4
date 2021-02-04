@@ -4286,6 +4286,9 @@ static int nand_block_isbad(struct mtd_info *mtd, loff_t offs)
 	int chipnr = (int)(offs >> chip->chip_shift);
 	int ret;
 
+	if (!chip->bbt)
+		return 0;
+
 	/* Select the NAND device */
 	ret = nand_get_device(chip);
 	if (ret)
