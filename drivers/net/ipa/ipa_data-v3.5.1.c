@@ -12,7 +12,7 @@
 #include "ipa_mem.h"
 
 /**
- * enum ipa_resource_type - IPA resource types used for the SDM845 SoC
+ * enum ipa_resource_type - IPA resource types for an SoC having IPA v3.5.1
  *
  * Note that the numeric values assigned to these members are the resource
  * numbers used by the hardware.  The first source type and the first
@@ -31,7 +31,7 @@ enum ipa_resource_type {
 	IPA_RESOURCE_TYPE_DST_DPS_DMARS,
 };
 
-/* Resource groups used for the SDM845 SoC */
+/* Resource groups used for an SoC having IPA v3.5.1 */
 enum ipa_rsrc_group_id {
 	/* Source resource group identifiers */
 	IPA_RSRC_GROUP_SRC_LWA_DL	= 0,
@@ -47,7 +47,7 @@ enum ipa_rsrc_group_id {
 	IPA_RSRC_GROUP_DST_COUNT,	/* Last; not a destination group */
 };
 
-/* QSB configuration for the SDM845 SoC. */
+/* QSB configuration data for an SoC having IPA v3.5.1 */
 static const struct ipa_qsb_data ipa_qsb_data[] = {
 	[IPA_QSB_MASTER_DDR] = {
 		.max_writes	= 8,
@@ -59,7 +59,7 @@ static const struct ipa_qsb_data ipa_qsb_data[] = {
 	},
 };
 
-/* Endpoint configuration for the SDM845 SoC. */
+/* Endpoint datdata for an SoC having IPA v3.5.1 */
 static const struct ipa_gsi_endpoint_data ipa_gsi_endpoint_data[] = {
 	[IPA_ENDPOINT_AP_COMMAND_TX] = {
 		.ee_id		= GSI_EE_AP,
@@ -188,7 +188,7 @@ static const struct ipa_gsi_endpoint_data ipa_gsi_endpoint_data[] = {
 	},
 };
 
-/* Source resource configuration data for the SDM845 SoC */
+/* Source resource configuration data for an SoC having IPA v3.5.1 */
 static const struct ipa_resource ipa_resource_src[] = {
 	[IPA_RESOURCE_TYPE_SRC_PKT_CONTEXTS] = {
 		.limits[IPA_RSRC_GROUP_SRC_LWA_DL] = {
@@ -250,7 +250,7 @@ static const struct ipa_resource ipa_resource_src[] = {
 	},
 };
 
-/* Destination resource configuration data for the SDM845 SoC */
+/* Destination resource configuration data for an SoC having IPA v3.5.1 */
 static const struct ipa_resource ipa_resource_dst[] = {
 	[IPA_RESOURCE_TYPE_DST_DATA_SECTORS] = {
 		.limits[IPA_RSRC_GROUP_DST_LWA_DL] = {
@@ -276,7 +276,7 @@ static const struct ipa_resource ipa_resource_dst[] = {
 	},
 };
 
-/* Resource configuration for the SDM845 SoC. */
+/* Resource configuration data for an SoC having IPA v3.5.1 */
 static const struct ipa_resource_data ipa_resource_data = {
 	.rsrc_group_src_count	= IPA_RSRC_GROUP_SRC_COUNT,
 	.rsrc_group_dst_count	= IPA_RSRC_GROUP_DST_COUNT,
@@ -286,7 +286,7 @@ static const struct ipa_resource_data ipa_resource_data = {
 	.resource_dst		= ipa_resource_dst,
 };
 
-/* IPA-resident memory region configuration for the SDM845 SoC. */
+/* IPA-resident memory region data for an SoC having IPA v3.5.1 */
 static const struct ipa_mem ipa_mem_local_data[] = {
 	[IPA_MEM_UC_SHARED] = {
 		.offset		= 0x0000,
@@ -365,6 +365,7 @@ static const struct ipa_mem ipa_mem_local_data[] = {
 	},
 };
 
+/* Memory configuration data for an SoC having IPA v3.5.1 */
 static const struct ipa_mem_data ipa_mem_data = {
 	.local_count	= ARRAY_SIZE(ipa_mem_local_data),
 	.local		= ipa_mem_local_data,
@@ -394,14 +395,15 @@ static const struct ipa_interconnect_data ipa_interconnect_data[] = {
 	},
 };
 
+/* Clock and interconnect configuration data for an SoC having IPA v3.5.1 */
 static const struct ipa_clock_data ipa_clock_data = {
 	.core_clock_rate	= 75 * 1000 * 1000,	/* Hz */
 	.interconnect_count	= ARRAY_SIZE(ipa_interconnect_data),
 	.interconnect_data	= ipa_interconnect_data,
 };
 
-/* Configuration data for the SDM845 SoC. */
-const struct ipa_data ipa_data_sdm845 = {
+/* Configuration data for an SoC having IPA v3.5.1 */
+const struct ipa_data ipa_data_v3_5_1 = {
 	.version	= IPA_VERSION_3_5_1,
 	.qsb_count	= ARRAY_SIZE(ipa_qsb_data),
 	.qsb_data	= ipa_qsb_data,
