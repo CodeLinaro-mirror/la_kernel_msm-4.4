@@ -312,5 +312,6 @@ extern const struct ipa_data ipa_data_v4_2;
 extern const struct ipa_data ipa_data_v4_5;
 extern const struct ipa_data ipa_data_v4_7;
 extern const struct ipa_data ipa_data_v4_9;
+extern const struct ipa_data ipa_data_v4_11;
 
 #endif /* _IPA_DATA_H_ */
