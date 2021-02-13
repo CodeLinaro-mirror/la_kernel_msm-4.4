@@ -227,8 +227,8 @@ static void ipa_hardware_config_comp(struct ipa *ipa)
 {
 	u32 val;
 
-	/* Nothing to configure for IPA v3.5.1 */
-	if (ipa->version == IPA_VERSION_3_5_1)
+	/* Nothing to configure prior to IPA v4.0 */
+	if (ipa->version < IPA_VERSION_4_0)
 		return;
 
 	val = ioread32(ipa->reg_virt + IPA_REG_COMP_CFG_OFFSET);
@@ -239,8 +239,6 @@ static void ipa_hardware_config_comp(struct ipa *ipa)
 		val &= ~IPA_QMB_SELECT_GLOBAL_EN_FMASK;
 	} else if (ipa->version < IPA_VERSION_4_5) {
 		val |= GSI_MULTI_AXI_MASTERS_DIS_FMASK;
-	} else {
-		/* For IPA v4.5 IPA_FULL_FLUSH_WAIT_RSC_CLOSE_EN is 0 */
 	}
 
 	val |= GSI_MULTI_INORDER_RD_DIS_FMASK;
@@ -274,13 +272,13 @@ ipa_hardware_config_qsb(struct ipa *ipa, const struct ipa_data *data)
 
 	/* Max outstanding read accesses for QSB masters */
 	val = u32_encode_bits(data0->max_reads, GEN_QMB_0_MAX_READS_FMASK);
-	if (ipa->version != IPA_VERSION_3_5_1)
+	if (ipa->version >= IPA_VERSION_4_0)
 		val |= u32_encode_bits(data0->max_reads_beats,
 				       GEN_QMB_0_MAX_READS_BEATS_FMASK);
 	if (data->qsb_count > 1) {
 		val |= u32_encode_bits(data1->max_reads,
 				       GEN_QMB_1_MAX_READS_FMASK);
-		if (ipa->version != IPA_VERSION_3_5_1)
+		if (ipa->version >= IPA_VERSION_4_0)
 			val |= u32_encode_bits(data1->max_reads_beats,
 					       GEN_QMB_1_MAX_READS_BEATS_FMASK);
 	}
@@ -403,7 +401,7 @@ static void ipa_hardware_config(struct ipa *ipa, const struct ipa_data *data)
 	}
 
 	/* Implement some hardware workarounds */
-	if (version != IPA_VERSION_3_5_1 && version < IPA_VERSION_4_5) {
+	if (version >= IPA_VERSION_4_0 && version < IPA_VERSION_4_5) {
 		/* Enable open global clocks (not needed for IPA v4.5) */
 		val = GLOBAL_FMASK;
 		val |= GLOBAL_2X_CLK_FMASK;
