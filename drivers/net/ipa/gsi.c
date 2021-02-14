@@ -843,6 +843,9 @@ static void gsi_channel_program(struct gsi_channel *channel, bool doorbell)
 			val |= u32_encode_bits(GSI_ESCAPE_BUF_ONLY,
 					       PREFETCH_MODE_FMASK);
 	}
+	/* All channels set DB_IN_BYTES */
+	if (gsi->version >= IPA_VERSION_4_9)
+		val |= DB_IN_BYTES;
 
 	iowrite32(val, gsi->virt + GSI_CH_C_QOS_OFFSET(channel_id));
 
