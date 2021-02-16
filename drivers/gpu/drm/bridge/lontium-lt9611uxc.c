@@ -54,6 +54,7 @@ struct lt9611uxc {
 
 	bool hpd_supported;
 	bool edid_read;
+	/* can be accessed from different threads, so protect this with ocm_lock */
 	bool hdmi_connected;
 	uint8_t fw_version;
 };
@@ -146,32 +147,39 @@ static irqreturn_t lt9611uxc_irq_thread_handler(int irq, void *dev_id)
 	if (irq_status)
 		regmap_write(lt9611uxc->regmap, 0xb022, 0);
 
-	lt9611uxc_unlock(lt9611uxc);
-
 	if (irq_status & BIT(0)) {
 		lt9611uxc->edid_read = !!(hpd_status & BIT(0));
 		wake_up_all(&lt9611uxc->wq);
 	}
 
 	if (irq_status & BIT(1)) {
-		lt9611uxc->hdmi_connected = !!(hpd_status & BIT(1));
+		lt9611uxc->hdmi_connected = hpd_status & BIT(1);
 		schedule_work(&lt9611uxc->work);
 	}
+
+	lt9611uxc_unlock(lt9611uxc);
 
 	return IRQ_HANDLED;
 }
 
-void lt9611uxc_hpd_work(struct work_struct *work)
+static void lt9611uxc_hpd_work(struct work_struct *work)
 {
 	struct lt9611uxc *lt9611uxc = container_of(work, struct lt9611uxc, work);
+	bool connected;
 
 	if (lt9611uxc->connector.dev)
 		drm_kms_helper_hotplug_event(lt9611uxc->connector.dev);
-	else
+	else {
+
+		mutex_lock(&lt9611uxc->ocm_lock);
+		connected = lt9611uxc->hdmi_connected;
+		mutex_unlock(&lt9611uxc->ocm_lock);
+
 		drm_bridge_hpd_notify(&lt9611uxc->bridge,
-				      lt9611uxc->hdmi_connected ?
+				      connected ?
 				      connector_status_connected :
 				      connector_status_disconnected);
+	}
 }
 
 static void lt9611uxc_reset(struct lt9611uxc *lt9611uxc)
@@ -463,10 +471,10 @@ static enum drm_connector_status lt9611uxc_bridge_detect(struct drm_bridge *brid
 	int ret;
 	bool connected = true;
 
+	lt9611uxc_lock(lt9611uxc);
+
 	if (lt9611uxc->hpd_supported) {
-		lt9611uxc_lock(lt9611uxc);
 		ret = regmap_read(lt9611uxc->regmap, 0xb023, &reg_val);
-		lt9611uxc_unlock(lt9611uxc);
 
 		if (ret)
 			dev_err(lt9611uxc->dev, "failed to read hpd status: %d\n", ret);
@@ -474,6 +482,8 @@ static enum drm_connector_status lt9611uxc_bridge_detect(struct drm_bridge *brid
 			connected  = !!(reg_val & BIT(1));
 	}
 	lt9611uxc->hdmi_connected = connected;
+
+	lt9611uxc_unlock(lt9611uxc);
 
 	return connected ?  connector_status_connected :
 				connector_status_disconnected;
