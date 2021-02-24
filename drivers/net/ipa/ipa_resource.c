@@ -45,7 +45,7 @@ static bool ipa_resource_limits_valid(struct ipa *ipa,
 	 * for a resource group not supported by hardware.
 	 */
 	for (i = 0; i < data->resource_src_count; i++) {
-		const struct ipa_resource_src *resource;
+		const struct ipa_resource *resource;
 
 		resource = &data->resource_src[i];
 		for (j = group_count; j < IPA_RESOURCE_GROUP_MAX; j++)
@@ -58,7 +58,7 @@ static bool ipa_resource_limits_valid(struct ipa *ipa,
 		return false;
 
 	for (i = 0; i < data->resource_dst_count; i++) {
-		const struct ipa_resource_dst *resource;
+		const struct ipa_resource *resource;
 
 		resource = &data->resource_dst[i];
 		for (j = group_count; j < IPA_RESOURCE_GROUP_MAX; j++)
@@ -97,7 +97,7 @@ ipa_resource_config_common(struct ipa *ipa, u32 offset,
 }
 
 static void ipa_resource_config_src(struct ipa *ipa, u32 resource_type,
-				    const struct ipa_resource_src *resource)
+				    const struct ipa_resource *resource)
 {
 	u32 group_count = ipa_resource_group_src_count(ipa->version);
 	const struct ipa_resource_limits *ylimits;
@@ -123,7 +123,7 @@ static void ipa_resource_config_src(struct ipa *ipa, u32 resource_type,
 }
 
 static void ipa_resource_config_dst(struct ipa *ipa, u32 resource_type,
-				    const struct ipa_resource_dst *resource)
+				    const struct ipa_resource *resource)
 {
 	u32 group_count = ipa_resource_group_dst_count(ipa->version);
 	const struct ipa_resource_limits *ylimits;
