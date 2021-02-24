@@ -355,73 +355,7 @@ enum ipa_pulse_gran {
 	IPA_GRAN_655350_US			= 0x7,
 };
 
-/* # IPA source resource groups available based on version */
-static inline u32 ipa_resource_group_src_count(enum ipa_version version)
-{
-	switch (version) {
-	case IPA_VERSION_3_0:
-	case IPA_VERSION_3_1:	/* XXX Not sure for this version */
-		return 6;
-
-	case IPA_VERSION_3_5:
-	case IPA_VERSION_3_5_1:
-		return 4;
-
-	case IPA_VERSION_4_0:
-	case IPA_VERSION_4_1:
-		return 4;
-
-	case IPA_VERSION_4_2:
-	case IPA_VERSION_4_7:
-		return 1;
-
-	case IPA_VERSION_4_5:
-		return 5;
-
-	case IPA_VERSION_4_9:
-	case IPA_VERSION_4_11:
-		return 3;
-
-	default:
-		return 0;
-	}
-}
-
-/* # IPA destination resource groups available based on version */
-static inline u32 ipa_resource_group_dst_count(enum ipa_version version)
-{
-	switch (version) {
-	case IPA_VERSION_3_0:
-	case IPA_VERSION_3_1:	/* XXX Not sure for this version */
-		return 6;
-
-	case IPA_VERSION_3_5:
-	case IPA_VERSION_3_5_1:
-		return 3;
-
-	case IPA_VERSION_4_0:
-	case IPA_VERSION_4_1:
-		return 4;
-
-	case IPA_VERSION_4_2:
-	case IPA_VERSION_4_7:
-		return 1;
-
-	case IPA_VERSION_4_5:
-		return 5;
-
-	case IPA_VERSION_4_9:
-		return 4;
-
-	case IPA_VERSION_4_11:
-		return 3;
-
-	default:
-		return 0;
-	}
-}
-
-/* Not all of the following are present (depends on the count, above) */
+/* Not all of the following are present (platform dependent) */
 #define IPA_REG_SRC_RSRC_GRP_01_RSRC_TYPE_N_OFFSET(rt) \
 					(0x00000400 + 0x0020 * (rt))
 #define IPA_REG_SRC_RSRC_GRP_23_RSRC_TYPE_N_OFFSET(rt) \

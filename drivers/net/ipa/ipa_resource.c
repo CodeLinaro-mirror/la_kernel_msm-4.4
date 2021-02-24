@@ -37,7 +37,7 @@ static bool ipa_resource_limits_valid(struct ipa *ipa,
 	/* We program at most 6 source or destination resource group limits */
 	BUILD_BUG_ON(IPA_RESOURCE_GROUP_MAX > 6);
 
-	group_count = ipa_resource_group_src_count(ipa->version);
+	group_count = data->rsrc_group_src_count;
 	if (!group_count || group_count > IPA_RESOURCE_GROUP_MAX)
 		return false;
 
@@ -53,7 +53,7 @@ static bool ipa_resource_limits_valid(struct ipa *ipa,
 				return false;
 	}
 
-	group_count = ipa_resource_group_dst_count(ipa->version);
+	group_count = data->rsrc_group_src_count;
 	if (!group_count || group_count > IPA_RESOURCE_GROUP_MAX)
 		return false;
 
@@ -99,7 +99,7 @@ ipa_resource_config_common(struct ipa *ipa, u32 offset,
 static void ipa_resource_config_src(struct ipa *ipa, u32 resource_type,
 				    const struct ipa_resource_data *data)
 {
-	u32 group_count = ipa_resource_group_src_count(ipa->version);
+	u32 group_count = data->rsrc_group_src_count;
 	const struct ipa_resource_limits *ylimits;
 	const struct ipa_resource *resource;
 	u32 offset;
@@ -128,7 +128,7 @@ static void ipa_resource_config_src(struct ipa *ipa, u32 resource_type,
 static void ipa_resource_config_dst(struct ipa *ipa, u32 resource_type,
 				    const struct ipa_resource_data *data)
 {
-	u32 group_count = ipa_resource_group_dst_count(ipa->version);
+	u32 group_count = data->rsrc_group_dst_count;
 	const struct ipa_resource_limits *ylimits;
 	const struct ipa_resource *resource;
 	u32 offset;
