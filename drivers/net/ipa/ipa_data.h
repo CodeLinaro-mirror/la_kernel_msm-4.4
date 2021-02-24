@@ -194,18 +194,23 @@ struct ipa_gsi_endpoint_data {
 	struct ipa_endpoint_data endpoint;
 };
 
-/** enum ipa_resource_type_src - source resource types */
-enum ipa_resource_type_src {
-	IPA_RESOURCE_TYPE_SRC_PKT_CONTEXTS,
+/**
+ * enum ipa_resource_type - IPA resource types
+ *
+ * Note that the numeric values assigned to these members are the resource
+ * numbers used by the hardware.  The first source type and the first
+ * destination type are both assumed by code to have numeric value 0.
+ */
+enum ipa_resource_type {
+	/* Source resource types; first must have value 0 */
+	IPA_RESOURCE_TYPE_SRC_PKT_CONTEXTS		= 0,
 	IPA_RESOURCE_TYPE_SRC_DESCRIPTOR_LISTS,
 	IPA_RESOURCE_TYPE_SRC_DESCRIPTOR_BUFF,
 	IPA_RESOURCE_TYPE_SRC_HPS_DMARS,
 	IPA_RESOURCE_TYPE_SRC_ACK_ENTRIES,
-};
 
-/** enum ipa_resource_type_dst - destination resource types */
-enum ipa_resource_type_dst {
-	IPA_RESOURCE_TYPE_DST_DATA_SECTORS,
+	/* Destination resource types; first must have value 0 */
+	IPA_RESOURCE_TYPE_DST_DATA_SECTORS		= 0,
 	IPA_RESOURCE_TYPE_DST_DPS_DMARS,
 };
 
@@ -225,7 +230,7 @@ struct ipa_resource_limits {
  * @limits:	array of limits to use for each resource group
  */
 struct ipa_resource_src {
-	enum ipa_resource_type_src type;
+	enum ipa_resource_type type;	/* IPA_RESOURCE_TYPE_SRC_* */
 	struct ipa_resource_limits limits[IPA_RESOURCE_GROUP_SRC_MAX];
 };
 
@@ -235,7 +240,7 @@ struct ipa_resource_src {
  * @limits:	array of limits to use for each resource group
  */
 struct ipa_resource_dst {
-	enum ipa_resource_type_dst type;
+	enum ipa_resource_type type;	/* IPA_RESOURCE_TYPE_DST_* */
 	struct ipa_resource_limits limits[IPA_RESOURCE_GROUP_DST_MAX];
 };
 
