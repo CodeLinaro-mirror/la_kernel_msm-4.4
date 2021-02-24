@@ -195,26 +195,6 @@ struct ipa_gsi_endpoint_data {
 };
 
 /**
- * enum ipa_resource_type - IPA resource types
- *
- * Note that the numeric values assigned to these members are the resource
- * numbers used by the hardware.  The first source type and the first
- * destination type are both assumed by code to have numeric value 0.
- */
-enum ipa_resource_type {
-	/* Source resource types; first must have value 0 */
-	IPA_RESOURCE_TYPE_SRC_PKT_CONTEXTS		= 0,
-	IPA_RESOURCE_TYPE_SRC_DESCRIPTOR_LISTS,
-	IPA_RESOURCE_TYPE_SRC_DESCRIPTOR_BUFF,
-	IPA_RESOURCE_TYPE_SRC_HPS_DMARS,
-	IPA_RESOURCE_TYPE_SRC_ACK_ENTRIES,
-
-	/* Destination resource types; first must have value 0 */
-	IPA_RESOURCE_TYPE_DST_DATA_SECTORS		= 0,
-	IPA_RESOURCE_TYPE_DST_DPS_DMARS,
-};
-
-/**
  * struct ipa_resource_limits - minimum and maximum resource counts
  * @min:	minimum number of resources of a given type
  * @max:	maximum number of resources of a given type
