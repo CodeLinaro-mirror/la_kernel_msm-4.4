@@ -129,13 +129,20 @@ struct ipa_endpoint_rx_data {
 	bool aggr_close_eof;
 };
 
+/** enum ipa_checksum_type - type of endpoint checksumn offload used */
+enum ipa_checksum_type {
+	IPA_CHECKSUM_TYPE_DISABLED	= 0,
+	IPA_CHECKSUM_TYPE_ENABLED,		/* QMAP v4 upload or download */
+	IPA_CHECKSUM_TYPE_INLINE,		/* QMAP v5 inline offload */
+};
+
 /**
  * struct ipa_endpoint_config_data - IPA endpoint hardware configuration
  * @resource_group:	resource group to assign endpoint to
- * @checksum:		whether checksum offload is enabled
  * @qmap:		whether endpoint uses QMAP protocol
  * @aggregation:	whether endpoint supports aggregation
  * @status_enable:	whether endpoint uses status elements
+ * @checksum:		type of checksum offload used
  * @dma_mode:		whether endpoint operates in DMA mode
  * @dma_endpoint:	peer endpoint, if operating in DMA mode
  * @tx:			TX-specific endpoint information (see above)
@@ -143,11 +150,11 @@ struct ipa_endpoint_rx_data {
  */
 struct ipa_endpoint_config_data {
 	u32 resource_group;
-	bool checksum;
 	bool qmap;
 	bool aggregation;
 	bool status_enable;
 	bool dma_mode;
+	enum ipa_checksum_type checksum;
 	enum ipa_endpoint_name dma_endpoint;
 	union {
 		struct ipa_endpoint_tx_data tx;
