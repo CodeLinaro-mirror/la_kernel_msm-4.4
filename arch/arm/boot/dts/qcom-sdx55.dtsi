@@ -8,6 +8,7 @@
 
 #include <dt-bindings/clock/qcom,gcc-sdx55.h>
 #include <dt-bindings/clock/qcom,rpmh.h>
+#include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/interconnect/qcom,sdx55.h>
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/power/qcom-rpmpd.h>
@@ -360,6 +361,58 @@
 			clocks = <&gcc GCC_SDCC1_AHB_CLK>,
 				 <&gcc GCC_SDCC1_APPS_CLK>;
 			clock-names = "iface", "core";
+			status = "disabled";
+		};
+
+		pcie_ep: qcom,pcie@40002000 {
+			compatible = "qcom,pcie-ep";
+
+			reg = <0x40000000 0xf1d>,
+				<0x40000f20 0xc8>,
+				<0x40001000 0x1000>,
+				<0x01c00000 0x3000>,
+				<0x01c03000 0x1000>,
+				<0x01fcb000 0x1000>;
+			reg-names = "dbi", "elbi", "iatu", "parf", "addr_space", "tcsr";
+
+			#address-cells = <0>;
+			interrupt-parent = <&pcie_ep>;
+			interrupts = <0>;
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0xffffffff>;
+			interrupt-map = <0 &intc 0 140 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "int_global";
+
+			clkreq-gpio = <&tlmm 56 GPIO_ACTIVE_LOW>;
+			perst-gpio = <&tlmm 57 GPIO_ACTIVE_HIGH>;
+			wake-gpio = <&tlmm 53 GPIO_ACTIVE_LOW>;
+
+			vdda-supply = <&vreg_l1e_bb_1p2>;
+			vdda_phy-supply = <&vreg_l4e_bb_0p875>;
+
+			clocks = <&gcc GCC_PCIE_PIPE_CLK>,
+				<&gcc GCC_PCIE_CFG_AHB_CLK>,
+				<&gcc GCC_PCIE_MSTR_AXI_CLK>,
+				<&gcc GCC_PCIE_SLV_AXI_CLK>,
+				<&gcc GCC_PCIE_AUX_CLK>,
+				<&gcc GCC_PCIE_0_CLKREF_CLK>,
+				<&gcc GCC_PCIE_SLEEP_CLK>,
+				<&gcc GCC_PCIE_SLV_Q2A_AXI_CLK>;
+
+			clock-names = "pipe_clk", "ahb_clk",
+					"master_axi_clk", "slave_axi_clk",
+					"aux_clk", "ldo",
+					"sleep_clk",
+					"slave_q2a_axi_clk";
+
+			resets = <&gcc GCC_PCIE_BCR>;
+			reset-names = "core_reset";
+
+			power-domains = <&gcc PCIE_GDSC>;
+
+			phys = <&pcie0_lane>;
+			phy-names = "pciephy";
+
 			status = "disabled";
 		};
 
