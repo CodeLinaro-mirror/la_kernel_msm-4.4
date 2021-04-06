@@ -679,6 +679,26 @@ enum v4l2_mpeg_video_frame_skip_mode -
     otherwise the decoder expects a single frame in per buffer.
     Applicable to the decoder, all codecs.
 
+``V4L2_CID_MPEG_VIDEO_DEC_DISPLAY_DELAY_ENABLE (boolean)``
+    If the display delay is enabled then the decoder is forced to return
+    a CAPTURE buffer (decoded frame) after processing a certain number
+    of OUTPUT buffers. The delay can be set through
+    ``V4L2_CID_MPEG_VIDEO_DEC_DISPLAY_DELAY``. This
+    feature can be used for example for generating thumbnails of videos.
+    Applicable to the decoder.
+
+``V4L2_CID_MPEG_VIDEO_DEC_DISPLAY_DELAY (integer)``
+    Display delay value for decoder. The decoder is forced to
+    return a decoded frame after the set 'display delay' number of
+    frames. If this number is low it may result in frames returned out
+    of display order, in addition the hardware may still be using the
+    returned buffer as a reference picture for subsequent frames.
+
+``V4L2_CID_MPEG_VIDEO_AU_DELIMITER (boolean)``
+    If enabled then, AUD (Access Unit Delimiter) NALUs will be generated.
+    That could be useful to find the start of a frame without having to
+    fully parse each NALU. Applicable to the H264 and HEVC encoders.
+
 ``V4L2_CID_MPEG_VIDEO_H264_VUI_SAR_ENABLE (boolean)``
     Enable writing sample aspect ratio in the Video Usability
     Information. Applicable to the H264 encoder.
@@ -2096,12 +2116,22 @@ MFC 5.1 Control IDs
     feature can be used for example for generating thumbnails of videos.
     Applicable to the H264 decoder.
 
+    .. note::
+
+       This control is deprecated. Use the standard
+       ``V4L2_CID_MPEG_VIDEO_DEC_DISPLAY_DELAY_ENABLE`` control instead.
+
 ``V4L2_CID_MPEG_MFC51_VIDEO_DECODER_H264_DISPLAY_DELAY (integer)``
     Display delay value for H264 decoder. The decoder is forced to
     return a decoded frame after the set 'display delay' number of
     frames. If this number is low it may result in frames returned out
     of display order, in addition the hardware may still be using the
     returned buffer as a reference picture for subsequent frames.
+
+    .. note::
+
+       This control is deprecated. Use the standard
+       ``V4L2_CID_MPEG_VIDEO_DEC_DISPLAY_DELAY`` control instead.
 
 ``V4L2_CID_MPEG_MFC51_VIDEO_H264_NUM_REF_PIC_FOR_P (integer)``
     The number of reference pictures used for encoding a P picture.

@@ -550,7 +550,7 @@ static int venc_set_properties(struct venus_inst *inst)
 	u32 profile, level;
 	int ret;
 
-	ret = venus_helper_set_work_mode(inst, VIDC_WORK_MODE_2);
+	ret = venus_helper_set_work_mode(inst);
 	if (ret)
 		return ret;
 
@@ -753,6 +753,20 @@ static int venc_set_properties(struct venus_inst *inst)
 	ret = venus_helper_set_profile_level(inst, profile, level);
 	if (ret)
 		return ret;
+
+	if (inst->fmt_cap->pixfmt == V4L2_PIX_FMT_H264 ||
+	    inst->fmt_cap->pixfmt == V4L2_PIX_FMT_HEVC) {
+		struct hfi_enable en = {};
+
+		ptype = HFI_PROPERTY_PARAM_VENC_H264_GENERATE_AUDNAL;
+
+		if (ctr->aud_enable)
+			en.enable = 1;
+
+		ret = hfi_session_set_property(inst, ptype, &en);
+		if (ret)
+			return ret;
+	}
 
 	return 0;
 }
