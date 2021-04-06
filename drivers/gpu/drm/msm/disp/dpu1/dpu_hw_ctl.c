@@ -503,7 +503,9 @@ static void dpu_hw_ctl_intf_cfg_v1(struct dpu_hw_ctl *ctx,
 	DPU_REG_WRITE(c, CTL_INTF_ACTIVE, intf_active);
 	if (cfg->intf_master)
 		DPU_REG_WRITE(c, CTL_INTF_MASTER, BIT(cfg->intf_master - INTF_0));
-	DPU_REG_WRITE(c, CTL_MERGE_3D_ACTIVE, merge_3d_active);
+	if (cfg->merge_3d)
+		DPU_REG_WRITE(c, CTL_MERGE_3D_ACTIVE,
+			      BIT(cfg->merge_3d - MERGE_3D_0));
 	if (cfg->intf_master)
 		DPU_ERROR("ACTIVE: %x %x %lx\n", intf_active, merge_3d_active, BIT(cfg->intf_master - INTF_0));
 	else
