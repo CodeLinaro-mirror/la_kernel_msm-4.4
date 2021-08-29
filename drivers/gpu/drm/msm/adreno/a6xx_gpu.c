@@ -783,16 +783,16 @@ static bool a6xx_ucode_check_version(struct a6xx_gpu *a6xx_gpu,
 			ret = true;
 			goto out;
 		}
-
+	}  else {
+		/*
+		 * a650 tier targets don't need whereami but still need to be
+		 * equal to or newer than 0.95 for other security fixes
+		 */
 		DRM_DEV_ERROR(&gpu->pdev->dev,
 			"a650 SQE ucode is too old. Have version %x need at least %x\n",
 			buf[0] & 0xfff, 0x095);
-	} else if (adreno_is_a660(adreno_gpu)) {
-		ret = true;
-	} else {
-		DRM_DEV_ERROR(&gpu->pdev->dev,
-			"unknown GPU, add it to a6xx_ucode_check_version()!!\n");
 	}
+
 out:
 	msm_gem_put_vaddr(obj);
 	return ret;
