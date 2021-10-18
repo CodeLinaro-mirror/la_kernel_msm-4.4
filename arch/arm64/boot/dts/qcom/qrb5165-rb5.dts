@@ -804,14 +804,27 @@
 	};
 };
 
-&pon_pwrkey {
-	status = "okay";
-};
-
-&pon_resin {
+&pm8150l_lpg {
 	status = "okay";
 
-	linux,code = <KEY_VOLUMEDOWN>;
+	led@1 {
+		reg = <1>;
+		label = "green:user0";
+
+		linux,default-trigger = "heartbeat";
+		default-state = "on";
+	};
+
+	led@2 {
+		reg = <2>;
+		label = "green:user1";
+		default-state = "on";
+	};
+
+	led@3 {
+		reg = <3>;
+		label = "green:user2";
+	};
 };
 
 &qupv3_id_0 {
