@@ -191,10 +191,29 @@ static int wcd9380_interrupt_callback(struct sdw_slave *slave,
 	return IRQ_HANDLED;
 }
 
+static int wcd9380_clk_stop(struct sdw_slave *slave, enum sdw_clk_stop_mode mode,
+			    enum sdw_clk_stop_type type)
+{
+	struct regmap *regmap = dev_get_regmap(&slave->dev, NULL);
+	struct device *dev = &slave->dev;
+
+	if (regmap && type == SDW_CLK_POST_DEPREPARE) {
+		/* only check for pending interrupts if powered up */
+		if (pm_runtime_get_if_in_use(dev)) {
+			wcd9380_interrupt_callback(slave, 0);
+			pm_runtime_mark_last_busy(dev);
+			pm_runtime_put_autosuspend(dev);
+		}
+	}
+
+	return 0;
+}
+
 static struct sdw_slave_ops wcd9380_slave_ops = {
 	.update_status = wcd9380_update_status,
 	.interrupt_callback = wcd9380_interrupt_callback,
 	.bus_config = wcd9380_bus_config,
+	.clk_stop = wcd9380_clk_stop,
 };
 
 static int wcd938x_sdw_component_bind(struct device *dev,
@@ -249,6 +268,7 @@ static int wcd9380_probe(struct sdw_slave *pdev,
 					SDW_SCP_INT1_BUS_CLASH |
 					SDW_SCP_INT1_PARITY;
 	pdev->prop.lane_control_support = true;
+	pdev->prop.simple_clk_stop_capable = true;
 	if (wcd->is_tx) {
 		pdev->prop.source_ports = GENMASK(WCD938X_MAX_SWR_PORTS, 0);
 		pdev->prop.src_dpn_prop = wcd938x_dpn_prop;
