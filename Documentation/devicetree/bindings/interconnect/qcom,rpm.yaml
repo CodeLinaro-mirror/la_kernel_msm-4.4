@@ -27,6 +27,14 @@ properties:
       - qcom,msm8939-pcnoc
       - qcom,msm8939-snoc
       - qcom,msm8939-snoc-mm
+      - qcom,msm8996-a0noc
+      - qcom,msm8996-a1noc
+      - qcom,msm8996-a2noc
+      - qcom,msm8996-bimc
+      - qcom,msm8996-cnoc
+      - qcom,msm8996-mnoc
+      - qcom,msm8996-pnoc
+      - qcom,msm8996-snoc
       - qcom,qcs404-bimc
       - qcom,qcs404-pcnoc
       - qcom,qcs404-snoc
@@ -43,6 +51,9 @@ properties:
     items:
       - description: Bus Clock
       - description: Bus A Clock
+
+  power-domains:
+    maxItems: 1
 
 required:
   - compatible
