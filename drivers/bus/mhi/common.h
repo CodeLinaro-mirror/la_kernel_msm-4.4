@@ -9,32 +9,123 @@
 
 #include <linux/mhi.h>
 
+/* MHI register bits */
+#define MHIREGLEN_MHIREGLEN_MASK		GENMASK(31, 0)
+#define MHIREGLEN_MHIREGLEN_SHIFT		0
+
+#define MHIVER_MHIVER_MASK			GENMASK(31, 0)
+#define MHIVER_MHIVER_SHIFT			0
+
+#define MHICFG_NHWER_MASK			GENMASK(31, 24)
+#define MHICFG_NHWER_SHIFT			24
+#define MHICFG_NER_MASK				GENMASK(23, 16)
+#define MHICFG_NER_SHIFT			16
+#define MHICFG_NHWCH_MASK			GENMASK(15, 8)
+#define MHICFG_NHWCH_SHIFT			8
+#define MHICFG_NCH_MASK				GENMASK(7, 0)
+#define MHICFG_NCH_SHIFT			0
+
+#define CHDBOFF_CHDBOFF_MASK			GENMASK(31, 0)
+#define CHDBOFF_CHDBOFF_SHIFT			0
+
+#define ERDBOFF_ERDBOFF_MASK			GENMASK(31, 0)
+#define ERDBOFF_ERDBOFF_SHIFT			0
+
+#define BHIOFF_BHIOFF_MASK			GENMASK(31, 0)
+#define BHIOFF_BHIOFF_SHIFT			0
+
+#define BHIEOFF_BHIEOFF_MASK			GENMASK(31, 0)
+#define BHIEOFF_BHIEOFF_SHIFT			0
+
+#define DEBUGOFF_DEBUGOFF_MASK			GENMASK(31, 0)
+#define DEBUGOFF_DEBUGOFF_SHIFT			0
+
+#define MHICTRL_MHISTATE_MASK			GENMASK(15, 8)
+#define MHICTRL_MHISTATE_SHIFT			8
+#define MHICTRL_RESET_MASK			2
+#define MHICTRL_RESET_SHIFT			1
+
+#define MHISTATUS_MHISTATE_MASK			GENMASK(15, 8)
+#define MHISTATUS_MHISTATE_SHIFT		8
+#define MHISTATUS_SYSERR_MASK			4
+#define MHISTATUS_SYSERR_SHIFT			2
+#define MHISTATUS_READY_MASK			1
+#define MHISTATUS_READY_SHIFT			0
+
+#define CCABAP_LOWER_CCABAP_LOWER_MASK		GENMASK(31, 0)
+#define CCABAP_LOWER_CCABAP_LOWER_SHIFT		0
+
+#define CCABAP_HIGHER_CCABAP_HIGHER_MASK	GENMASK(31, 0)
+#define CCABAP_HIGHER_CCABAP_HIGHER_SHIFT	0
+
+#define ECABAP_LOWER_ECABAP_LOWER_MASK		GENMASK(31, 0)
+#define ECABAP_LOWER_ECABAP_LOWER_SHIFT		0
+
+#define ECABAP_HIGHER_ECABAP_HIGHER_MASK	GENMASK(31, 0)
+#define ECABAP_HIGHER_ECABAP_HIGHER_SHIFT	0
+
+#define CRCBAP_LOWER_CRCBAP_LOWER_MASK		GENMASK(31, 0)
+#define CRCBAP_LOWER_CRCBAP_LOWER_SHIFT		0
+
+#define CRCBAP_HIGHER_CRCBAP_HIGHER_MASK	GENMASK(31, 0)
+#define CRCBAP_HIGHER_CRCBAP_HIGHER_SHIFT	0
+
+#define CRDB_LOWER_CRDB_LOWER_MASK		GENMASK(31, 0)
+#define CRDB_LOWER_CRDB_LOWER_SHIFT		0
+
+#define CRDB_HIGHER_CRDB_HIGHER_MASK		GENMASK(31, 0)
+#define CRDB_HIGHER_CRDB_HIGHER_SHIFT		0
+
+#define MHICTRLBASE_LOWER_MHICTRLBASE_LOWER_MASK GENMASK(31, 0)
+#define MHICTRLBASE_LOWER_MHICTRLBASE_LOWER_SHIFT 0
+
+#define MHICTRLBASE_HIGHER_MHICTRLBASE_HIGHER_MASK GENMASK(31, 0)
+#define MHICTRLBASE_HIGHER_MHICTRLBASE_HIGHER_SHIFT 0
+
+#define MHICTRLLIMIT_LOWER_MHICTRLLIMIT_LOWER_MASK GENMASK(31, 0)
+#define MHICTRLLIMIT_LOWER_MHICTRLLIMIT_LOWER_SHIFT 0
+
+#define MHICTRLLIMIT_HIGHER_MHICTRLLIMIT_HIGHER_MASK GENMASK(31, 0)
+#define MHICTRLLIMIT_HIGHER_MHICTRLLIMIT_HIGHER_SHIFT 0
+
+#define MHIDATABASE_LOWER_MHIDATABASE_LOWER_MASK GENMASK(31, 0)
+#define MHIDATABASE_LOWER_MHIDATABASE_LOWER_SHIFT 0
+
+#define MHIDATABASE_HIGHER_MHIDATABASE_HIGHER_MASK GENMASK(31, 0)
+#define MHIDATABASE_HIGHER_MHIDATABASE_HIGHER_SHIFT 0
+
+#define MHIDATALIMIT_LOWER_MHIDATALIMIT_LOWER_MASK GENMASK(31, 0)
+#define MHIDATALIMIT_LOWER_MHIDATALIMIT_LOWER_SHIFT 0
+
+#define MHIDATALIMIT_HIGHER_MHIDATALIMIT_HIGHER_MASK GENMASK(31, 0)
+#define MHIDATALIMIT_HIGHER_MHIDATALIMIT_HIGHER_SHIFT 0
+
 /* Command Ring Element macros */
 /* No operation command */
-#define MHI_TRE_CMD_NOOP_PTR (0)
-#define MHI_TRE_CMD_NOOP_DWORD0 (0)
+#define MHI_TRE_CMD_NOOP_PTR 0
+#define MHI_TRE_CMD_NOOP_DWORD0 0
 #define MHI_TRE_CMD_NOOP_DWORD1 (MHI_CMD_NOP << 16)
 
 /* Channel reset command */
-#define MHI_TRE_CMD_RESET_PTR (0)
-#define MHI_TRE_CMD_RESET_DWORD0 (0)
+#define MHI_TRE_CMD_RESET_PTR 0
+#define MHI_TRE_CMD_RESET_DWORD0 0
 #define MHI_TRE_CMD_RESET_DWORD1(chid) ((chid << 24) | \
 					(MHI_CMD_RESET_CHAN << 16))
 
 /* Channel stop command */
-#define MHI_TRE_CMD_STOP_PTR (0)
-#define MHI_TRE_CMD_STOP_DWORD0 (0)
+#define MHI_TRE_CMD_STOP_PTR 0
+#define MHI_TRE_CMD_STOP_DWORD0 0
 #define MHI_TRE_CMD_STOP_DWORD1(chid) ((chid << 24) | \
 				       (MHI_CMD_STOP_CHAN << 16))
 
 /* Channel start command */
-#define MHI_TRE_CMD_START_PTR (0)
-#define MHI_TRE_CMD_START_DWORD0 (0)
+#define MHI_TRE_CMD_START_PTR 0
+#define MHI_TRE_CMD_START_DWORD0 0
 #define MHI_TRE_CMD_START_DWORD1(chid) ((chid << 24) | \
 					(MHI_CMD_START_CHAN << 16))
 
-#define MHI_TRE_GET_CMD_CHID(tre) (((tre)->dword[1] >> 24) & 0xFF)
-#define MHI_TRE_GET_CMD_TYPE(tre) (((tre)->dword[1] >> 16) & 0xFF)
+#define MHI_TRE_GET_CMD_CHID(tre) (((tre)->dword[1] >> 24) & 0xff)
+#define MHI_TRE_GET_CMD_TYPE(tre) (((tre)->dword[1] >> 16) & 0xff)
 
 /* Event descriptor macros */
 /* Transfer completion event */
@@ -42,18 +133,18 @@
 #define MHI_TRE_EV_DWORD0(code, len) ((code << 24) | len)
 #define MHI_TRE_EV_DWORD1(chid, type) ((chid << 24) | (type << 16))
 #define MHI_TRE_GET_EV_PTR(tre) ((tre)->ptr)
-#define MHI_TRE_GET_EV_CODE(tre) (((tre)->dword[0] >> 24) & 0xFF)
-#define MHI_TRE_GET_EV_LEN(tre) ((tre)->dword[0] & 0xFFFF)
-#define MHI_TRE_GET_EV_CHID(tre) (((tre)->dword[1] >> 24) & 0xFF)
-#define MHI_TRE_GET_EV_TYPE(tre) (((tre)->dword[1] >> 16) & 0xFF)
-#define MHI_TRE_GET_EV_STATE(tre) (((tre)->dword[0] >> 24) & 0xFF)
-#define MHI_TRE_GET_EV_EXECENV(tre) (((tre)->dword[0] >> 24) & 0xFF)
+#define MHI_TRE_GET_EV_CODE(tre) (((tre)->dword[0] >> 24) & 0xff)
+#define MHI_TRE_GET_EV_LEN(tre) ((tre)->dword[0] & 0xffff)
+#define MHI_TRE_GET_EV_CHID(tre) (((tre)->dword[1] >> 24) & 0xff)
+#define MHI_TRE_GET_EV_TYPE(tre) (((tre)->dword[1] >> 16) & 0xff)
+#define MHI_TRE_GET_EV_STATE(tre) (((tre)->dword[0] >> 24) & 0xff)
+#define MHI_TRE_GET_EV_EXECENV(tre) (((tre)->dword[0] >> 24) & 0xff)
 #define MHI_TRE_GET_EV_SEQ(tre) ((tre)->dword[0])
 #define MHI_TRE_GET_EV_TIME(tre) ((tre)->ptr)
 #define MHI_TRE_GET_EV_COOKIE(tre) lower_32_bits((tre)->ptr)
-#define MHI_TRE_GET_EV_VEID(tre) (((tre)->dword[0] >> 16) & 0xFF)
-#define MHI_TRE_GET_EV_LINKSPEED(tre) (((tre)->dword[1] >> 24) & 0xFF)
-#define MHI_TRE_GET_EV_LINKWIDTH(tre) ((tre)->dword[0] & 0xFF)
+#define MHI_TRE_GET_EV_VEID(tre) (((tre)->dword[0] >> 16) & 0xff)
+#define MHI_TRE_GET_EV_LINKSPEED(tre) (((tre)->dword[1] >> 24) & 0xff)
+#define MHI_TRE_GET_EV_LINKWIDTH(tre) ((tre)->dword[0] & 0xff)
 
 /* State change event */
 #define MHI_SC_EV_PTR 0
