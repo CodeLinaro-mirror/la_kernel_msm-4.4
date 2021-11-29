@@ -71,10 +71,6 @@
 #define GSI_CPHA		BIT(4)
 #define GSI_CPOL		BIT(5)
 
-#define MAX_TX_SG		3
-#define NUM_SPI_XFER		8
-#define SPI_XFER_TIMEOUT_MS	250
-
 struct spi_geni_master {
 	struct geni_se se;
 	struct device *dev;
@@ -350,17 +346,20 @@ spi_gsi_callback_result(void *cb, const struct dmaengine_result *result)
 {
 	struct spi_master *spi = cb;
 
+	spi->cur_msg->status = -EIO;
 	if (result->result != DMA_TRANS_NOERROR) {
 		dev_err(&spi->dev, "DMA txn failed: %d\n", result->result);
 		return;
 	}
 
 	if (!result->residue) {
+		spi->cur_msg->status = 0;
 		dev_dbg(&spi->dev, "DMA txn completed\n");
-		spi_finalize_current_transfer(spi);
 	} else {
 		dev_err(&spi->dev, "DMA xfer has pending: %d\n", result->residue);
 	}
+
+	spi_finalize_current_transfer(spi);
 }
 
 static int setup_gsi_xfer(struct spi_transfer *xfer, struct spi_geni_master *mas,
