@@ -1,0 +1,10 @@
+config MHI_BUS_EP
+	tristate "Modem Host Interface (MHI) bus Endpoint implementation"
+	help
+	  Bus driver for MHI protocol. Modem Host Interface (MHI) is a
+	  communication protocol used by the host processors to control
+	  and communicate with modem devices over a high speed peripheral
+	  bus or shared memory.
+
+	  MHI_BUS_EP implements the MHI protocol for the endpoint devices
+	  like SDX55 modem connected to the host machine over PCIe.
