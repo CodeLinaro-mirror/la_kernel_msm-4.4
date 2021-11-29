@@ -43,10 +43,16 @@ Required properties:
                    "qcom,pmi8962",
                    "qcom,pmi8994",
                    "qcom,pmi8998",
+                   "qcom,pm8005",
+                   "qcom,pm8350",
+                   "qcom,pm8350b",
+                   "qcom,pm8350c",
                    "qcom,pmk8002",
                    "qcom,pmk8350",
                    "qcom,pmr735a",
+                   "qcom,pmr735b",
                    "qcom,smb2351",
+
                    or generalized "qcom,spmi-pmic".
 - reg:             Specifies the SPMI USID slave address for this device.
                    For more information see:
