@@ -29,6 +29,11 @@ properties:
         - sdsp
         - cdsp
 
+  qcom,non-secure-domain:
+    type: boolean
+    description: >
+      Property to specify that dsp domain is non-secure.
+
   '#address-cells':
     const: 1
 
