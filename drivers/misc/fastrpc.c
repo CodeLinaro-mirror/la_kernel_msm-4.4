@@ -832,6 +832,20 @@ static int fastrpc_create_maps(struct fastrpc_invoke_ctx *ctx)
 	return 0;
 }
 
+static struct fastrpc_invoke_buf *fastrpc_invoke_buf_start(
+		struct fastrpc_remote_arg *pra, u32 sc) {
+	unsigned int len = REMOTE_SCALARS_LENGTH(sc);
+
+	return (struct fastrpc_invoke_buf *)(&pra[len]);
+}
+
+static struct fastrpc_phy_page *fastrpc_phy_page_start(
+		u32 sc, struct fastrpc_invoke_buf *buf) {
+	unsigned int nTotal = REMOTE_SCALARS_LENGTH(sc);
+
+	return (struct fastrpc_phy_page *)(&buf[nTotal]);
+}
+
 static int fastrpc_get_args(u32 kernel, struct fastrpc_invoke_ctx *ctx)
 {
 	struct device *dev = ctx->fl->sctx->dev;
@@ -859,9 +873,8 @@ static int fastrpc_get_args(u32 kernel, struct fastrpc_invoke_ctx *ctx)
 		return err;
 
 	rpra = ctx->buf->virt;
-	list = ctx->buf->virt + ctx->nscalars * sizeof(*rpra);
-	pages = ctx->buf->virt + ctx->nscalars * (sizeof(*list) +
-		sizeof(*rpra));
+	list = fastrpc_invoke_buf_start(rpra, ctx->sc);
+	pages = fastrpc_phy_page_start(ctx->sc, list);
 	args = (uintptr_t)ctx->buf->virt + metalen;
 	rlen = pkt_size - metalen;
 	ctx->rpra = rpra;
