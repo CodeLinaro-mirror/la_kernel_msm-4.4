@@ -403,6 +403,12 @@
 		/* Micrel KSZ9031RNZ PHY */
 		rgmii_phy: phy@7 {
 			reg = <0x7>;
+
+			reset-assert-us = <10000>;
+			reset-deassert-us = <30000>;
+			interrupt-parent = <&tlmm>;
+			interrupts-extended = <&tlmm 124 IRQ_TYPE_EDGE_FALLING>; /* phy intr */
+
 			device_type = "ethernet-phy";
 			compatible = "ethernet-phy-ieee802.3-c22";
 		};
