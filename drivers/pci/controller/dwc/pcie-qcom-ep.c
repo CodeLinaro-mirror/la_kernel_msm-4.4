@@ -396,7 +396,7 @@ static void qcom_pcie_perst_assert(struct dw_pcie *pci)
 	struct device *dev = pci->dev;
 
 	if (pcie_ep->link_status == QCOM_PCIE_EP_LINK_DISABLED) {
-		dev_dbg(dev, "Link is already disabled\n");
+		dev_info(dev, "Link is already disabled\n");
 		return;
 	}
 
@@ -516,33 +516,33 @@ static irqreturn_t qcom_pcie_ep_global_irq_thread(int irq, void *data)
 	status &= mask;
 
 	if (FIELD_GET(PARF_INT_ALL_LINK_DOWN, status)) {
-		dev_dbg(dev, "Received Linkdown event\n");
+		dev_info(dev, "Received Linkdown event\n");
 		pcie_ep->link_status = QCOM_PCIE_EP_LINK_DOWN;
 		pci_epc_linkdown(pci->ep.epc);
 	} else if (FIELD_GET(PARF_INT_ALL_BME, status)) {
-		dev_dbg(dev, "Received BME event. Link is enabled!\n");
+		dev_info(dev, "Received BME event. Link is enabled!\n");
 		pcie_ep->link_status = QCOM_PCIE_EP_LINK_ENABLED;
 		pci_epc_bme_notify(pci->ep.epc);
 	} else if (FIELD_GET(PARF_INT_ALL_PM_TURNOFF, status)) {
-		dev_dbg(dev, "Received PM Turn-off event! Entering L23\n");
+		dev_info(dev, "Received PM Turn-off event! Entering L23\n");
 		val = readl_relaxed(pcie_ep->parf + PARF_PM_CTRL);
 		val |= PARF_PM_CTRL_READY_ENTR_L23;
 		writel_relaxed(val, pcie_ep->parf + PARF_PM_CTRL);
 	} else if (FIELD_GET(PARF_INT_ALL_DSTATE_CHANGE, status)) {
 		dstate = dw_pcie_readl_dbi(pci, DBI_CON_STATUS) &
 					   DBI_CON_STATUS_POWER_STATE_MASK;
-		dev_dbg(dev, "Received D%d state event\n", dstate);
+		dev_info(dev, "Received D%d state event\n", dstate);
 		if (dstate == 3) {
 			val = readl_relaxed(pcie_ep->parf + PARF_PM_CTRL);
 			val |= PARF_PM_CTRL_REQ_EXIT_L1;
 			writel_relaxed(val, pcie_ep->parf + PARF_PM_CTRL);
 		}
 	} else if (FIELD_GET(PARF_INT_ALL_LINK_UP, status)) {
-		dev_dbg(dev, "Received Linkup event. Enumeration complete!\n");
+		dev_info(dev, "Received Linkup event. Enumeration complete!\n");
 		dw_pcie_ep_linkup(&pci->ep);
 		pcie_ep->link_status = QCOM_PCIE_EP_LINK_UP;
 	} else {
-		dev_dbg(dev, "Received unknown event: %d\n", status);
+		dev_info(dev, "Received unknown event: %d\n", status);
 	}
 
 	return IRQ_HANDLED;
@@ -557,10 +557,10 @@ static irqreturn_t qcom_pcie_ep_perst_irq_thread(int irq, void *data)
 
 	perst = gpiod_get_value(pcie_ep->reset);
 	if (perst) {
-		dev_dbg(dev, "PERST asserted by host. Shutting down the PCIe link!\n");
+		dev_info(dev, "PERST asserted by host. Shutting down the PCIe link!\n");
 		qcom_pcie_perst_assert(pci);
 	} else {
-		dev_dbg(dev, "PERST de-asserted by host. Starting link training!\n");
+		dev_info(dev, "PERST de-asserted by host. Starting link training!\n");
 		qcom_pcie_perst_deassert(pci);
 	}
 
