@@ -13,6 +13,7 @@
 #include <linux/delay.h>
 #include <linux/gpio/consumer.h>
 #include <linux/mfd/syscon.h>
+#include <linux/of_device.h>
 #include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include <linux/pm_domain.h>
@@ -130,18 +131,17 @@ enum qcom_pcie_ep_link_status {
 	QCOM_PCIE_EP_LINK_DOWN,
 };
 
-static struct clk_bulk_data qcom_pcie_ep_clks[] = {
-	{ .id = "cfg" },
-	{ .id = "aux" },
-	{ .id = "bus_master" },
-	{ .id = "bus_slave" },
-	{ .id = "ref" },
-	{ .id = "sleep" },
-	{ .id = "slave_q2a" },
+struct qcom_pcie_cfg {
+	const char **clocks;
+	unsigned int num_clocks;
 };
 
 struct qcom_pcie_ep {
 	struct dw_pcie pci;
+
+	const struct qcom_pcie_cfg *cfg;
+
+	struct clk_bulk_data *clocks;
 
 	void __iomem *parf;
 	void __iomem *elbi;
@@ -227,8 +227,8 @@ static int qcom_pcie_enable_resources(struct qcom_pcie_ep *pcie_ep)
 {
 	int ret;
 
-	ret = clk_bulk_prepare_enable(ARRAY_SIZE(qcom_pcie_ep_clks),
-				      qcom_pcie_ep_clks);
+	ret = clk_bulk_prepare_enable(pcie_ep->cfg->num_clocks,
+				      pcie_ep->clocks);
 	if (ret)
 		return ret;
 
@@ -249,8 +249,8 @@ static int qcom_pcie_enable_resources(struct qcom_pcie_ep *pcie_ep)
 err_phy_exit:
 	phy_exit(pcie_ep->phy);
 err_disable_clk:
-	clk_bulk_disable_unprepare(ARRAY_SIZE(qcom_pcie_ep_clks),
-				   qcom_pcie_ep_clks);
+	clk_bulk_disable_unprepare(pcie_ep->cfg->num_clocks,
+				   pcie_ep->clocks);
 
 	return ret;
 }
@@ -259,8 +259,8 @@ static void qcom_pcie_disable_resources(struct qcom_pcie_ep *pcie_ep)
 {
 	phy_power_off(pcie_ep->phy);
 	phy_exit(pcie_ep->phy);
-	clk_bulk_disable_unprepare(ARRAY_SIZE(qcom_pcie_ep_clks),
-				   qcom_pcie_ep_clks);
+	clk_bulk_disable_unprepare(pcie_ep->cfg->num_clocks,
+				   pcie_ep->clocks);
 }
 
 static int qcom_pcie_perst_deassert(struct dw_pcie *pci)
@@ -478,8 +478,8 @@ static int qcom_pcie_ep_get_resources(struct platform_device *pdev,
 		return ret;
 	}
 
-	ret = devm_clk_bulk_get(dev, ARRAY_SIZE(qcom_pcie_ep_clks),
-				qcom_pcie_ep_clks);
+	ret = devm_clk_bulk_get(dev, pcie_ep->cfg->num_clocks,
+				pcie_ep->clocks);
 	if (ret)
 		return ret;
 
@@ -651,11 +651,25 @@ static int qcom_pcie_ep_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct qcom_pcie_ep *pcie_ep;
-	int ret;
+	const struct qcom_pcie_cfg *pcie_cfg;
+	int i, ret;
+
+	pcie_cfg = of_device_get_match_data(dev);
+	if (!pcie_cfg)
+		return -EINVAL;
 
 	pcie_ep = devm_kzalloc(dev, sizeof(*pcie_ep), GFP_KERNEL);
 	if (!pcie_ep)
 		return -ENOMEM;
+
+	pcie_ep->cfg = pcie_cfg;
+
+	pcie_ep->clocks = devm_kcalloc(dev, pcie_ep->cfg->num_clocks, sizeof(*pcie_ep->clocks), GFP_KERNEL);
+	if (!pcie_ep->clocks)
+		return -ENOMEM;
+
+	for (i = 0; i < pcie_ep->cfg->num_clocks; i++)
+		pcie_ep->clocks[i].id = pcie_ep->cfg->clocks[i];
 
 	pcie_ep->pci.dev = dev;
 	pcie_ep->pci.ops = &pci_ops;
@@ -689,8 +703,23 @@ static int qcom_pcie_ep_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static const char * sdx55_clocks[] = {
+	"cfg",
+	"aux",
+	"bus_master",
+	"bus_slave",
+	"ref",
+	"sleep",
+	"slave_q2a",
+};
+
+static const struct qcom_pcie_cfg sdx55_cfg = {
+	.clocks = sdx55_clocks,
+	.num_clocks = ARRAY_SIZE(sdx55_clocks),
+};
+
 static const struct of_device_id qcom_pcie_ep_match[] = {
-	{ .compatible = "qcom,sdx55-pcie-ep", },
+	{ .compatible = "qcom,sdx55-pcie-ep", .data = &sdx55_cfg },
 	{ }
 };
 
