@@ -329,9 +329,9 @@ static int qcom_pcie_perst_deassert(struct dw_pcie *pci)
 	/* Configure PCIe to endpoint mode */
 	writel_relaxed(PARF_DEVICE_TYPE_EP, pcie_ep->parf + PARF_DEVICE_TYPE);
 
-	/* Allow entering L1 state */
+	/* Don't allow L1 state */
 	val = readl_relaxed(pcie_ep->parf + PARF_PM_CTRL);
-	val &= ~PARF_PM_CTRL_REQ_NOT_ENTR_L1;
+	val |= PARF_PM_CTRL_REQ_NOT_ENTR_L1;
 	writel_relaxed(val, pcie_ep->parf + PARF_PM_CTRL);
 
 	/* Read halts write */
