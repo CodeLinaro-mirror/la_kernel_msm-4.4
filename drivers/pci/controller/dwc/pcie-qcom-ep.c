@@ -787,6 +787,24 @@ static const struct qcom_pcie_cfg sdx55_cfg = {
 	.has_tcsr = true,
 };
 
+static const char * sm8450_clocks[] = {
+	"cfg",
+	"aux",
+	"bus_master",
+	"bus_slave",
+	"ref",
+	"slave_q2a",
+	"ddrss_sf_tbu",
+	"aggre_noc_axi",
+};
+
+static const struct qcom_pcie_cfg sm8450_cfg = {
+	.clocks = sm8450_clocks,
+	.num_clocks = ARRAY_SIZE(sm8450_clocks),
+	.has_pipe_clk = true,
+	.pipe_clk_need_muxing = true,
+};
+
 static const struct of_device_id qcom_pcie_ep_match[] = {
 	{ .compatible = "qcom,sdx55-pcie-ep", .data = &sdx55_cfg },
 	{ .compatible = "qcom,sm8450-pcie-ep", .data = &sm8450_cfg },
