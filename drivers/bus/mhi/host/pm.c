@@ -928,7 +928,7 @@ static int __mhi_pm_resume(struct mhi_controller *mhi_cntrl, bool force)
 	cur_state = mhi_tryset_pm_state(mhi_cntrl, MHI_PM_M3_EXIT);
 	if (cur_state != MHI_PM_M3_EXIT) {
 		write_unlock_irq(&mhi_cntrl->pm_lock);
-		dev_info(dev,
+		dev_dbg(dev,
 			 "Error setting to PM state: %s from: %s\n",
 			 to_mhi_pm_state_str(MHI_PM_M3_EXIT),
 			 to_mhi_pm_state_str(mhi_cntrl->pm_state));
@@ -1067,7 +1067,7 @@ int mhi_async_power_up(struct mhi_controller *mhi_cntrl)
 	u32 interval_us = 25000; /* poll register field every 25 milliseconds */
 	int ret;
 
-	dev_info(dev, "Requested to power ON\n");
+	dev_dbg(dev, "Requested to power ON\n");
 
 	/* Supply default wake routines if not provided by controller driver */
 	if (!mhi_cntrl->wake_get || !mhi_cntrl->wake_put ||
@@ -1129,7 +1129,7 @@ int mhi_async_power_up(struct mhi_controller *mhi_cntrl)
 
 	mutex_unlock(&mhi_cntrl->pm_mutex);
 
-	dev_info(dev, "Power on setup success\n");
+	dev_dbg(dev, "Power on setup success\n");
 
 	return 0;
 
