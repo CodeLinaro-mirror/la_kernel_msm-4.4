@@ -136,6 +136,8 @@ struct qcom_pcie_cfg {
 	unsigned int num_clocks;
 
 	bool has_tcsr;
+	bool has_pipe_clk;
+	bool pipe_clk_need_muxing;
 };
 
 struct qcom_pcie_ep {
@@ -161,6 +163,12 @@ struct qcom_pcie_ep {
 	enum qcom_pcie_ep_link_status link_status;
 	int global_irq;
 	int perst_irq;
+
+	struct clk *pipe_clk;
+
+	struct clk *pipe_clk_src;
+	struct clk *phy_pipe_clk;
+	struct clk *ref_clk_src;
 };
 
 static int qcom_pcie_ep_core_reset(struct qcom_pcie_ep *pcie_ep)
@@ -246,8 +254,22 @@ static int qcom_pcie_enable_resources(struct qcom_pcie_ep *pcie_ep)
 	if (ret)
 		goto err_phy_exit;
 
+	/* Set pipe clock as clock source for pcie_pipe_clk_src */
+	if (pcie_ep->cfg->pipe_clk_need_muxing)
+		clk_set_parent(pcie_ep->pipe_clk_src, pcie_ep->phy_pipe_clk);
+
+	if (pcie_ep->cfg->has_pipe_clk) {
+		ret = clk_prepare_enable(pcie_ep->pipe_clk);
+		if (ret) {
+			dev_err(pcie_ep->pci.dev, "cannot prepare/enable pipe clock\n");
+			goto err_phy_power_off;
+		}
+	}
+
 	return 0;
 
+err_phy_power_off:
+	phy_power_off(pcie_ep->phy);
 err_phy_exit:
 	phy_exit(pcie_ep->phy);
 err_disable_clk:
@@ -259,10 +281,16 @@ err_disable_clk:
 
 static void qcom_pcie_disable_resources(struct qcom_pcie_ep *pcie_ep)
 {
+	if (pcie_ep->cfg->has_pipe_clk)
+		clk_disable_unprepare(pcie_ep->pipe_clk);
 	phy_power_off(pcie_ep->phy);
 	phy_exit(pcie_ep->phy);
 	clk_bulk_disable_unprepare(pcie_ep->cfg->num_clocks,
 				   pcie_ep->clocks);
+
+	/* Set TCXO as clock source for pcie_pipe_clk_src */
+	if (pcie_ep->cfg->pipe_clk_need_muxing)
+		clk_set_parent(pcie_ep->pipe_clk_src, pcie_ep->ref_clk_src);
 }
 
 static int qcom_pcie_perst_deassert(struct dw_pcie *pci)
@@ -499,6 +527,26 @@ static int qcom_pcie_ep_get_resources(struct platform_device *pdev,
 	if (ret)
 		return ret;
 
+	if (pcie_ep->cfg->pipe_clk_need_muxing) {
+		pcie_ep->pipe_clk_src = devm_clk_get(dev, "pipe_mux");
+		if (IS_ERR(pcie_ep->pipe_clk_src))
+			return PTR_ERR(pcie_ep->pipe_clk_src);
+
+		pcie_ep->phy_pipe_clk = devm_clk_get(dev, "phy_pipe");
+		if (IS_ERR(pcie_ep->phy_pipe_clk))
+			return PTR_ERR(pcie_ep->phy_pipe_clk);
+
+		pcie_ep->ref_clk_src = devm_clk_get(dev, "ref");
+		if (IS_ERR(pcie_ep->ref_clk_src))
+			return PTR_ERR(pcie_ep->ref_clk_src);
+	}
+
+	if (pcie_ep->cfg->has_pipe_clk) {
+		pcie_ep->pipe_clk = devm_clk_get(dev, "pipe");
+		if (IS_ERR(pcie_ep->pipe_clk))
+			return PTR_ERR(pcie_ep->pipe_clk);
+	}
+
 	pcie_ep->core_reset = devm_reset_control_get_exclusive(dev, "core");
 	if (IS_ERR(pcie_ep->core_reset))
 		return PTR_ERR(pcie_ep->core_reset);
@@ -695,6 +743,10 @@ static int qcom_pcie_ep_probe(struct platform_device *pdev)
 	ret = qcom_pcie_ep_get_resources(pdev, pcie_ep);
 	if (ret)
 		return ret;
+
+	/* Set TCXO as clock source for pcie_pipe_clk_src */
+	if (pcie_ep->cfg->pipe_clk_need_muxing)
+		clk_set_parent(pcie_ep->pipe_clk_src, pcie_ep->ref_clk_src);
 
 	ret = dw_pcie_ep_init(&pcie_ep->pci.ep);
 	if (ret)
