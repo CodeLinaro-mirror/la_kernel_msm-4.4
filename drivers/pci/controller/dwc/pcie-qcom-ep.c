@@ -134,6 +134,8 @@ enum qcom_pcie_ep_link_status {
 struct qcom_pcie_cfg {
 	const char **clocks;
 	unsigned int num_clocks;
+
+	bool has_tcsr;
 };
 
 struct qcom_pcie_ep {
@@ -281,7 +283,8 @@ static int qcom_pcie_perst_deassert(struct dw_pcie *pci)
 	usleep_range(WAKE_DELAY_US, WAKE_DELAY_US + 500);
 	gpiod_set_value_cansleep(pcie_ep->wake, 0);
 
-	qcom_pcie_ep_configure_tcsr(pcie_ep);
+	if (pcie_ep->cfg->has_tcsr)
+		qcom_pcie_ep_configure_tcsr(pcie_ep);
 
 	/* Disable BDF to SID mapping */
 	val = readl_relaxed(pcie_ep->parf + PARF_BDF_TO_SID_CFG);
@@ -411,32 +414,10 @@ static const struct dw_pcie_ops pci_ops = {
 	.stop_link = qcom_pcie_dw_stop_link,
 };
 
-static int qcom_pcie_ep_get_io_resources(struct platform_device *pdev,
-					 struct qcom_pcie_ep *pcie_ep)
+static int qcom_pcie_ep_get_tcsr(struct device *dev, struct qcom_pcie_ep *pcie_ep)
 {
-	struct device *dev = &pdev->dev;
-	struct dw_pcie *pci = &pcie_ep->pci;
 	struct device_node *syscon;
-	struct resource *res;
 	int ret;
-
-	pcie_ep->parf = devm_platform_ioremap_resource_byname(pdev, "parf");
-	if (IS_ERR(pcie_ep->parf))
-		return PTR_ERR(pcie_ep->parf);
-
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "dbi");
-	pci->dbi_base = devm_pci_remap_cfg_resource(dev, res);
-	if (IS_ERR(pci->dbi_base))
-		return PTR_ERR(pci->dbi_base);
-	pci->dbi_base2 = pci->dbi_base;
-
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "elbi");
-	pcie_ep->elbi = devm_pci_remap_cfg_resource(dev, res);
-	if (IS_ERR(pcie_ep->elbi))
-		return PTR_ERR(pcie_ep->elbi);
-
-	pcie_ep->mmio_res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
-							 "mmio");
 
 	syscon = of_parse_phandle(dev->of_node, "qcom,perst-regs", 0);
 	if (!syscon) {
@@ -461,6 +442,41 @@ static int qcom_pcie_ep_get_io_resources(struct platform_device *pdev,
 	if (ret < 0) {
 		dev_err(dev, "No Perst Separation Enable offset in syscon\n");
 		return ret;
+	}
+
+	return 0;
+}
+
+static int qcom_pcie_ep_get_io_resources(struct platform_device *pdev,
+					 struct qcom_pcie_ep *pcie_ep)
+{
+	struct device *dev = &pdev->dev;
+	struct dw_pcie *pci = &pcie_ep->pci;
+	struct resource *res;
+	int ret;
+
+	pcie_ep->parf = devm_platform_ioremap_resource_byname(pdev, "parf");
+	if (IS_ERR(pcie_ep->parf))
+		return PTR_ERR(pcie_ep->parf);
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "dbi");
+	pci->dbi_base = devm_pci_remap_cfg_resource(dev, res);
+	if (IS_ERR(pci->dbi_base))
+		return PTR_ERR(pci->dbi_base);
+	pci->dbi_base2 = pci->dbi_base;
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "elbi");
+	pcie_ep->elbi = devm_pci_remap_cfg_resource(dev, res);
+	if (IS_ERR(pcie_ep->elbi))
+		return PTR_ERR(pcie_ep->elbi);
+
+	pcie_ep->mmio_res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
+							 "mmio");
+
+	if (pcie_ep->cfg->has_tcsr) {
+		ret = qcom_pcie_ep_get_tcsr(dev, pcie_ep);
+		if (ret)
+			return ret;
 	}
 
 	return 0;
@@ -716,10 +732,12 @@ static const char * sdx55_clocks[] = {
 static const struct qcom_pcie_cfg sdx55_cfg = {
 	.clocks = sdx55_clocks,
 	.num_clocks = ARRAY_SIZE(sdx55_clocks),
+	.has_tcsr = true,
 };
 
 static const struct of_device_id qcom_pcie_ep_match[] = {
 	{ .compatible = "qcom,sdx55-pcie-ep", .data = &sdx55_cfg },
+	{ .compatible = "qcom,sm8450-pcie-ep", .data = &sm8450_cfg },
 	{ }
 };
 
