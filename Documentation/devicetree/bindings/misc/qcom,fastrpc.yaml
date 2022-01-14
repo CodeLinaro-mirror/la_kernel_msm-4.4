@@ -34,6 +34,11 @@ properties:
     description: >
       Property to specify that dsp domain is non-secure.
 
+  qcom,vmids:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    description: Virtual machine IDs for remote processor.
+      Used to set up memory protection.
+
   '#address-cells':
     const: 1
 
