@@ -1940,15 +1940,14 @@
 			};
 		};
 
-		// TODO: What is the NSP subsystem?
-		nspss1-thermal {
+		cdsp1-thermal {
 			polling-delay-passive = <250>;
 			polling-delay = <1000>;
 
 			thermal-sensors = <&tsens1 3>;
 
 			trips {
-				nspss1_alert0: trip-point0 {
+				cdsp1_alert0: trip-point0 {
 					temperature = <90000>;
 					hysteresis = <1000>;
 					type = "hot";
@@ -1956,15 +1955,14 @@
 			};
 		};
 
-		// TODO: What is the NSP subsystem?
-		nspss2-thermal {
+		cdsp2-thermal {
 			polling-delay-passive = <250>;
 			polling-delay = <1000>;
 
 			thermal-sensors = <&tsens1 4>;
 
 			trips {
-				nspss2_alert0: trip-point0 {
+				cdsp2_alert0: trip-point0 {
 					temperature = <90000>;
 					hysteresis = <1000>;
 					type = "hot";
@@ -1972,15 +1970,14 @@
 			};
 		};
 
-		// TODO: What is the NSP subsystem?
-		nspss3-thermal {
+		cdsp3-thermal {
 			polling-delay-passive = <250>;
 			polling-delay = <1000>;
 
 			thermal-sensors = <&tsens1 5>;
 
 			trips {
-				nspss3_alert0: trip-point0 {
+				cdsp3_alert0: trip-point0 {
 					temperature = <90000>;
 					hysteresis = <1000>;
 					type = "hot";
