@@ -1145,6 +1145,7 @@ static void mhi_ep_release_device(struct device *dev)
 }
 
 static struct mhi_ep_device *mhi_ep_alloc_device(struct mhi_ep_cntrl *mhi_cntrl,
+						 struct device *parent,
 						 enum mhi_device_type dev_type)
 {
 	struct mhi_ep_device *mhi_dev;
@@ -1159,13 +1160,7 @@ static struct mhi_ep_device *mhi_ep_alloc_device(struct mhi_ep_cntrl *mhi_cntrl,
 	dev->bus = &mhi_ep_bus_type;
 	dev->release = mhi_ep_release_device;
 
-	/* Controller device is always allocated first */
-	if (dev_type == MHI_DEVICE_CONTROLLER)
-		/* for MHI controller device, parent is the bus device (e.g. PCI EPF) */
-		dev->parent = mhi_cntrl->cntrl_dev;
-	else
-		/* for MHI client devices, parent is the MHI controller device */
-		dev->parent = &mhi_cntrl->mhi_dev->dev;
+	dev->parent = parent;
 
 	mhi_dev->mhi_cntrl = mhi_cntrl;
 	mhi_dev->dev_type = dev_type;
@@ -1193,7 +1188,7 @@ static int mhi_ep_create_device(struct mhi_ep_cntrl *mhi_cntrl, u32 ch_id)
 		return -EINVAL;
 	}
 
-	mhi_dev = mhi_ep_alloc_device(mhi_cntrl, MHI_DEVICE_XFER);
+	mhi_dev = mhi_ep_alloc_device(mhi_cntrl, &mhi_cntrl->mhi_dev->dev, MHI_DEVICE_XFER);
 	if (IS_ERR(mhi_dev))
 		return PTR_ERR(mhi_dev);
 
@@ -1374,7 +1369,8 @@ int mhi_ep_register_controller(struct mhi_ep_cntrl *mhi_cntrl,
 	}
 
 	/* Allocate the controller device */
-	mhi_dev = mhi_ep_alloc_device(mhi_cntrl, MHI_DEVICE_CONTROLLER);
+	/* for MHI controller device, parent is the bus device (e.g. PCI EPF) */
+	mhi_dev = mhi_ep_alloc_device(mhi_cntrl, mhi_cntrl->cntrl_dev, MHI_DEVICE_CONTROLLER);
 	if (IS_ERR(mhi_dev)) {
 		dev_err(mhi_cntrl->cntrl_dev, "Failed to allocate controller device\n");
 		ret = PTR_ERR(mhi_dev);
