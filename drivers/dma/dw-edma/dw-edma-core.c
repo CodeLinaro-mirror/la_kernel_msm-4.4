@@ -725,24 +725,22 @@ static int dw_edma_channel_setup(struct dw_edma_chip *chip, bool write,
 	struct dma_device *dma;
 	u32 alloc, off_alloc;
 	u32 i, j, cnt;
-	int err = 0;
 	u32 pos;
 
 	if (write) {
 		i = 0;
 		cnt = dw->wr_ch_cnt;
-		dma = &dw->wr_edma;
 		alloc = wr_alloc;
 		off_alloc = 0;
 	} else {
 		i = dw->wr_ch_cnt;
 		cnt = dw->rd_ch_cnt;
-		dma = &dw->rd_edma;
 		alloc = rd_alloc;
 		off_alloc = wr_alloc;
 	}
 
-	INIT_LIST_HEAD(&dma->channels);
+	dma = &dw->edma;
+
 	for (j = 0; (alloc || dw->nr_irqs == 1) && j < cnt; j++, i++) {
 		chan = &dw->chan[i];
 
@@ -804,17 +802,25 @@ static int dw_edma_channel_setup(struct dw_edma_chip *chip, bool write,
 		dw_edma_v0_core_device_config(chan);
 	}
 
+	return 0;
+}
+
+static int dw_edma_setup(struct dw_edma_chip *chip)
+{
+	struct dw_edma *dw = chip->dw;
+	struct dma_device *dma = &dw->edma;
+	int err;
+
 	/* Set DMA channel capabilities */
 	dma_cap_zero(dma->cap_mask);
 	dma_cap_set(DMA_SLAVE, dma->cap_mask);
 	dma_cap_set(DMA_CYCLIC, dma->cap_mask);
 	dma_cap_set(DMA_PRIVATE, dma->cap_mask);
 	dma_cap_set(DMA_INTERLEAVE, dma->cap_mask);
-	dma->directions = BIT(write ? DMA_DEV_TO_MEM : DMA_MEM_TO_DEV);
+	dma->directions = BIT(DMA_DEV_TO_MEM) | BIT(DMA_MEM_TO_DEV);
 	dma->src_addr_widths = BIT(DMA_SLAVE_BUSWIDTH_4_BYTES);
 	dma->dst_addr_widths = BIT(DMA_SLAVE_BUSWIDTH_4_BYTES);
 	dma->residue_granularity = DMA_RESIDUE_GRANULARITY_DESCRIPTOR;
-	dma->chancnt = cnt;
 
 	/* Set DMA channel callbacks */
 	dma->dev = chip->dev;
@@ -967,6 +973,8 @@ int dw_edma_probe(struct dw_edma_chip *chip)
 	if (err)
 		return err;
 
+	INIT_LIST_HEAD(&dw->edma.channels);
+
 	/* Setup write channels */
 	err = dw_edma_channel_setup(chip, true, wr_alloc, rd_alloc);
 	if (err)
@@ -974,6 +982,10 @@ int dw_edma_probe(struct dw_edma_chip *chip)
 
 	/* Setup read channels */
 	err = dw_edma_channel_setup(chip, false, wr_alloc, rd_alloc);
+	if (err)
+		goto err_irq_free;
+
+	err = dw_edma_setup(chip);
 	if (err)
 		goto err_irq_free;
 
@@ -1013,15 +1025,8 @@ int dw_edma_remove(struct dw_edma_chip *chip)
 	pm_runtime_disable(dev);
 
 	/* Deregister eDMA device */
-	dma_async_device_unregister(&dw->wr_edma);
-	list_for_each_entry_safe(chan, _chan, &dw->wr_edma.channels,
-				 vc.chan.device_node) {
-		tasklet_kill(&chan->vc.task);
-		list_del(&chan->vc.chan.device_node);
-	}
-
-	dma_async_device_unregister(&dw->rd_edma);
-	list_for_each_entry_safe(chan, _chan, &dw->rd_edma.channels,
+	dma_async_device_unregister(&dw->edma);
+	list_for_each_entry_safe(chan, _chan, &dw->edma.channels,
 				 vc.chan.device_node) {
 		tasklet_kill(&chan->vc.task);
 		list_del(&chan->vc.chan.device_node);

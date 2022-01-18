@@ -116,10 +116,8 @@ struct dw_edma_core_ops {
 struct dw_edma {
 	char				name[20];
 
-	struct dma_device		wr_edma;
+	struct dma_device		edma;
 	u16				wr_ch_cnt;
-
-	struct dma_device		rd_edma;
 	u16				rd_ch_cnt;
 
 	struct dw_edma_region		rg_region;	/* Registers */
