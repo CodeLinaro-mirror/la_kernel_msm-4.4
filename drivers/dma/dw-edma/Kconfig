@@ -17,3 +17,11 @@ config DW_EDMA_PCIE
 	  Provides a glue-logic between the Synopsys DesignWare
 	  eDMA controller and an endpoint PCIe device. This also serves
 	  as a reference design to whom desires to use this IP.
+
+config DW_EDMA_QCOM
+	tristate "Synopsys DesignWare eDMA on Qualcomm platforms"
+	depends on ARCH_QCOM || COMPILE_TEST
+	select DW_EDMA
+	help
+	  Provides support for the eDMA blocks found on some of Qualcomm
+	  Snapdragon SoC families.

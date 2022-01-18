@@ -44,4 +44,14 @@ static inline int dw_edma_remove(struct dw_edma_chip *chip)
 }
 #endif /* CONFIG_DW_EDMA */
 
+struct platform_device;
+#if IS_ENABLED(CONFIG_DW_EDMA_QCOM)
+struct dw_edma_chip *dw_edma_qcom_probe(struct platform_device *pdev);
+#else
+static inline struct dw_edma_chip *dw_edma_qcom_probe(struct platform_device *pdev)
+{
+	return ERR_PTR(-ENODEV);
+}
+#endif /* CONFIG_DW_EDMA_QCOM */
+
 #endif /* _DW_EDMA_H */
