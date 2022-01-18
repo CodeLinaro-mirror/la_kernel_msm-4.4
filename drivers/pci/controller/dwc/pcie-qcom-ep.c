@@ -20,6 +20,7 @@
 #include <linux/regmap.h>
 #include <linux/reset.h>
 #include <linux/module.h>
+#include <linux/dma/edma.h>
 
 #include "pcie-designware.h"
 
@@ -67,6 +68,7 @@
 #define PARF_INT_ALL_PLS_ERR			BIT(15)
 #define PARF_INT_ALL_PME_LEGACY			BIT(16)
 #define PARF_INT_ALL_PLS_PME			BIT(17)
+#define PARF_INT_ALL_EDMA			BIT(22)
 
 /* PARF_BDF_TO_SID_CFG register fields */
 #define PARF_BDF_TO_SID_BYPASS			BIT(0)
@@ -169,6 +171,8 @@ struct qcom_pcie_ep {
 	struct clk *pipe_clk_src;
 	struct clk *phy_pipe_clk;
 	struct clk *ref_clk_src;
+
+	struct dw_edma_chip *edma;
 };
 
 static int qcom_pcie_ep_core_reset(struct qcom_pcie_ep *pcie_ep)
@@ -306,6 +310,13 @@ static int qcom_pcie_perst_deassert(struct dw_pcie *pci)
 		return ret;
 	}
 
+	/* We can probe eDMA only after resources are enabled */
+	ret = dw_edma_probe(pcie_ep->edma);
+	if (ret) {
+		dev_err(dev, "Failed to probe eDMA: %d\n", ret);
+		goto err_disable_resources;
+	}
+
 	/* Assert WAKE# to RC to indicate device is ready */
 	gpiod_set_value_cansleep(pcie_ep->wake, 1);
 	usleep_range(WAKE_DELAY_US, WAKE_DELAY_US + 500);
@@ -390,6 +401,7 @@ static int qcom_pcie_perst_deassert(struct dw_pcie *pci)
 	val = PARF_INT_ALL_LINK_DOWN | PARF_INT_ALL_BME |
 	      PARF_INT_ALL_PM_TURNOFF | PARF_INT_ALL_DSTATE_CHANGE |
 	      PARF_INT_ALL_LINK_UP;
+	val |= PARF_INT_ALL_EDMA;
 	writel_relaxed(val, pcie_ep->parf + PARF_INT_ALL_MASK);
 
 	ret = dw_pcie_ep_init_complete(&pcie_ep->pci.ep);
@@ -425,10 +437,17 @@ static void qcom_pcie_perst_assert(struct dw_pcie *pci)
 {
 	struct qcom_pcie_ep *pcie_ep = to_pcie_ep(pci);
 	struct device *dev = pci->dev;
+	int ret;
 
 	if (pcie_ep->link_status == QCOM_PCIE_EP_LINK_DISABLED) {
 		dev_info(dev, "Link is already disabled\n");
 		return;
+	}
+
+	if (pcie_ep->edma) {
+		ret = dw_edma_remove(pcie_ep->edma);
+		if (ret < 0)
+			dev_warn(dev, "can't remove eDMA properly: %d\n", ret);
 	}
 
 	qcom_pcie_disable_resources(pcie_ep);
@@ -743,6 +762,12 @@ static int qcom_pcie_ep_probe(struct platform_device *pdev)
 	ret = qcom_pcie_ep_get_resources(pdev, pcie_ep);
 	if (ret)
 		return ret;
+
+	pcie_ep->edma = dw_edma_qcom_probe(to_platform_device(dev));
+	if (IS_ERR(pcie_ep->edma)) {
+		ret = PTR_ERR(pcie_ep->edma);
+		return dev_err_probe(dev, ret, "Failed to probe eDMA\n");
+	}
 
 	/* Set TCXO as clock source for pcie_pipe_clk_src */
 	if (pcie_ep->cfg->pipe_clk_need_muxing)
