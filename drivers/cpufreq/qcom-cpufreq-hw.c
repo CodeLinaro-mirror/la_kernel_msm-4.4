@@ -317,7 +317,7 @@ retry:
 		throttled_freq = freq_hz / HZ_PER_KHZ;
 
 		/* Update thermal pressure (the boost frequencies are accepted) */
-		arch_update_thermal_pressure(policy->related_cpus, throttled_freq);
+		arch_update_thermal_pressure(policy->cpus, throttled_freq);
 
 		dev_pm_opp_put(opp);
 	}
