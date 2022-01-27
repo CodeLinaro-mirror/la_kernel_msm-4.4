@@ -265,7 +265,7 @@ static void dw_edma_v0_core_write_chunk(struct dw_edma_chunk *chunk)
 	list_for_each_entry(child, &chunk->burst->list, list) {
 		j--;
 		if (!j)
-			control |= (DW_EDMA_V0_LIE | DW_EDMA_V0_RIE);
+			control |= DW_EDMA_V0_LIE;
 
 		/* Channel control */
 		SET_LL_32(&lli[i].control, control);
@@ -279,7 +279,8 @@ static void dw_edma_v0_core_write_chunk(struct dw_edma_chunk *chunk)
 	}
 
 	llp = (void __iomem *)&lli[i];
-	control = DW_EDMA_V0_LLP | DW_EDMA_V0_TCB;
+	//control = DW_EDMA_V0_LLP | DW_EDMA_V0_TCB;
+	control = DW_EDMA_V0_LLP;
 	if (!chunk->cb)
 		control |= DW_EDMA_V0_CB;
 
@@ -344,6 +345,7 @@ void dw_edma_v0_core_start(struct dw_edma_chunk *chunk, bool first)
 		/* Linked list error */
 		tmp = GET_RW_32(dw, chan->dir, linked_list_err_en);
 		tmp |= FIELD_PREP(EDMA_V0_LINKED_LIST_ERR_MASK, BIT(chan->id));
+		tmp |= FIELD_PREP(EDMA_V0_LINKED_LIST_A_ERR_MASK, BIT(chan->id));
 		SET_RW_32(dw, chan->dir, linked_list_err_en, tmp);
 		/* Channel control */
 		SET_CH_32(dw, chan->dir, chan->id, ch_control1,

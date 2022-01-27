@@ -20,6 +20,7 @@
 #define EDMA_V0_CH_STATUS_MASK				GENMASK(6, 5)
 #define EDMA_V0_DOORBELL_CH_MASK			GENMASK(2, 0)
 #define EDMA_V0_LINKED_LIST_ERR_MASK			GENMASK(7, 0)
+#define EDMA_V0_LINKED_LIST_A_ERR_MASK			GENMASK(23, 16)
 
 #define EDMA_V0_CH_ODD_MSI_DATA_MASK			GENMASK(31, 16)
 #define EDMA_V0_CH_EVEN_MSI_DATA_MASK			GENMASK(15, 0)
@@ -228,6 +229,8 @@ struct dw_edma_v0_llp {
 			u32 msb;
 		};
 	} llp;
+	u32 reserved1;
+	u32 reserved2;
 } __packed;
 
 #endif /* _DW_EDMA_V0_REGS_H */
