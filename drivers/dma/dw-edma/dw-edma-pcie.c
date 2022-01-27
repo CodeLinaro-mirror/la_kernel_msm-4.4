@@ -42,9 +42,6 @@ struct dw_edma_pcie_data {
 	/* eDMA memory linked list location */
 	struct dw_edma_block		ll_wr[EDMA_MAX_WR_CH];
 	struct dw_edma_block		ll_rd[EDMA_MAX_RD_CH];
-	/* eDMA memory data location */
-	struct dw_edma_block		dt_wr[EDMA_MAX_WR_CH];
-	struct dw_edma_block		dt_rd[EDMA_MAX_RD_CH];
 	/* Other */
 	enum dw_edma_map_format		mf;
 	u8				irqs;
@@ -69,19 +66,6 @@ static const struct dw_edma_pcie_data snps_edda_data = {
 		DW_BLOCK(BAR_2, 0x00400000, 0x00000800)
 		/* Channel 1 - BAR 2, offset 6 Mbytes, size 2 Kbytes */
 		DW_BLOCK(BAR_2, 0x00600000, 0x00000800)
-	},
-	/* eDMA memory data location */
-	.dt_wr = {
-		/* Channel 0 - BAR 2, offset 8 Mbytes, size 2 Kbytes */
-		DW_BLOCK(BAR_2, 0x00800000, 0x00000800)
-		/* Channel 1 - BAR 2, offset 9 Mbytes, size 2 Kbytes */
-		DW_BLOCK(BAR_2, 0x00900000, 0x00000800)
-	},
-	.dt_rd = {
-		/* Channel 0 - BAR 2, offset 10 Mbytes, size 2 Kbytes */
-		DW_BLOCK(BAR_2, 0x00a00000, 0x00000800)
-		/* Channel 1 - BAR 2, offset 11 Mbytes, size 2 Kbytes */
-		DW_BLOCK(BAR_2, 0x00b00000, 0x00000800)
 	},
 	/* Other */
 	.mf				= EDMA_MF_EDMA_UNROLL,
@@ -171,11 +155,9 @@ static int dw_edma_pcie_probe(struct pci_dev *pdev,
 	mask = BIT(vsec_data.rg.bar);
 	for (i = 0; i < vsec_data.wr_ch_cnt; i++) {
 		mask |= BIT(vsec_data.ll_wr[i].bar);
-		mask |= BIT(vsec_data.dt_wr[i].bar);
 	}
 	for (i = 0; i < vsec_data.rd_ch_cnt; i++) {
 		mask |= BIT(vsec_data.ll_rd[i].bar);
-		mask |= BIT(vsec_data.dt_rd[i].bar);
 	}
 	err = pcim_iomap_regions(pdev, mask, pci_name(pdev));
 	if (err) {
@@ -233,9 +215,7 @@ static int dw_edma_pcie_probe(struct pci_dev *pdev,
 
 	for (i = 0; i < dw->wr_ch_cnt; i++) {
 		struct dw_edma_region *ll_region = &dw->ll_region_wr[i];
-		struct dw_edma_region *dt_region = &dw->dt_region_wr[i];
 		struct dw_edma_block *ll_block = &vsec_data.ll_wr[i];
-		struct dw_edma_block *dt_block = &vsec_data.dt_wr[i];
 
 		ll_region->vaddr = pcim_iomap_table(pdev)[ll_block->bar];
 		if (!ll_region->vaddr)
@@ -245,22 +225,11 @@ static int dw_edma_pcie_probe(struct pci_dev *pdev,
 		ll_region->paddr = pdev->resource[ll_block->bar].start;
 		ll_region->paddr += ll_block->off;
 		ll_region->sz = ll_block->sz;
-
-		dt_region->vaddr = pcim_iomap_table(pdev)[dt_block->bar];
-		if (!dt_region->vaddr)
-			return -ENOMEM;
-
-		dt_region->vaddr += dt_block->off;
-		dt_region->paddr = pdev->resource[dt_block->bar].start;
-		dt_region->paddr += dt_block->off;
-		dt_region->sz = dt_block->sz;
 	}
 
 	for (i = 0; i < dw->rd_ch_cnt; i++) {
 		struct dw_edma_region *ll_region = &dw->ll_region_rd[i];
-		struct dw_edma_region *dt_region = &dw->dt_region_rd[i];
 		struct dw_edma_block *ll_block = &vsec_data.ll_rd[i];
-		struct dw_edma_block *dt_block = &vsec_data.dt_rd[i];
 
 		ll_region->vaddr = pcim_iomap_table(pdev)[ll_block->bar];
 		if (!ll_region->vaddr)
@@ -270,15 +239,6 @@ static int dw_edma_pcie_probe(struct pci_dev *pdev,
 		ll_region->paddr = pdev->resource[ll_block->bar].start;
 		ll_region->paddr += ll_block->off;
 		ll_region->sz = ll_block->sz;
-
-		dt_region->vaddr = pcim_iomap_table(pdev)[dt_block->bar];
-		if (!dt_region->vaddr)
-			return -ENOMEM;
-
-		dt_region->vaddr += dt_block->off;
-		dt_region->paddr = pdev->resource[dt_block->bar].start;
-		dt_region->paddr += dt_block->off;
-		dt_region->sz = dt_block->sz;
 	}
 
 	/* Debug info */
@@ -301,11 +261,6 @@ static int dw_edma_pcie_probe(struct pci_dev *pdev,
 			i, vsec_data.ll_wr[i].bar,
 			vsec_data.ll_wr[i].off, dw->ll_region_wr[i].sz,
 			dw->ll_region_wr[i].vaddr, &dw->ll_region_wr[i].paddr);
-
-		pci_dbg(pdev, "Data:\tWRITE CH%.2u, BAR=%u, off=0x%.8lx, sz=0x%zx bytes, addr(v=%p, p=%pa)\n",
-			i, vsec_data.dt_wr[i].bar,
-			vsec_data.dt_wr[i].off, dw->dt_region_wr[i].sz,
-			dw->dt_region_wr[i].vaddr, &dw->dt_region_wr[i].paddr);
 	}
 
 	for (i = 0; i < dw->rd_ch_cnt; i++) {
@@ -313,11 +268,6 @@ static int dw_edma_pcie_probe(struct pci_dev *pdev,
 			i, vsec_data.ll_rd[i].bar,
 			vsec_data.ll_rd[i].off, dw->ll_region_rd[i].sz,
 			dw->ll_region_rd[i].vaddr, &dw->ll_region_rd[i].paddr);
-
-		pci_dbg(pdev, "Data:\tREAD CH%.2u, BAR=%u, off=0x%.8lx, sz=0x%zx bytes, addr(v=%p, p=%pa)\n",
-			i, vsec_data.dt_rd[i].bar,
-			vsec_data.dt_rd[i].off, dw->dt_region_rd[i].sz,
-			dw->dt_region_rd[i].vaddr, &dw->dt_region_rd[i].paddr);
 	}
 
 	pci_dbg(pdev, "Nr. IRQs:\t%u\n", dw->nr_irqs);

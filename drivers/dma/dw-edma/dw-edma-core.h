@@ -123,8 +123,6 @@ struct dw_edma {
 	struct dw_edma_region		rg_region;	/* Registers */
 	struct dw_edma_region		ll_region_wr[EDMA_MAX_WR_CH];
 	struct dw_edma_region		ll_region_rd[EDMA_MAX_RD_CH];
-	struct dw_edma_region		dt_region_wr[EDMA_MAX_WR_CH];
-	struct dw_edma_region		dt_region_rd[EDMA_MAX_RD_CH];
 
 	struct dw_edma_irq		*irq;
 	int				nr_irqs;

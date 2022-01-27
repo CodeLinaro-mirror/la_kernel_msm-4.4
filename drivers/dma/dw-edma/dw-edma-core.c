@@ -717,7 +717,6 @@ static void dw_edma_free_chan_resources(struct dma_chan *dchan)
 static int dw_edma_channel_setup(struct dw_edma_chip *chip, bool write,
 				 u32 wr_alloc, u32 rd_alloc)
 {
-	struct dw_edma_region *dt_region;
 	struct device *dev = chip->dev;
 	struct dw_edma *dw = chip->dw;
 	struct dw_edma_chan *chan;
@@ -744,11 +743,6 @@ static int dw_edma_channel_setup(struct dw_edma_chip *chip, bool write,
 	for (j = 0; (alloc || dw->nr_irqs == 1) && j < cnt; j++, i++) {
 		chan = &dw->chan[i];
 
-		dt_region = devm_kzalloc(dev, sizeof(*dt_region), GFP_KERNEL);
-		if (!dt_region)
-			return -ENOMEM;
-
-		chan->vc.chan.private = dt_region;
 
 		chan->chip = chip;
 		chan->id = j;
@@ -788,16 +782,6 @@ static int dw_edma_channel_setup(struct dw_edma_chip *chip, bool write,
 
 		chan->vc.desc_free = vchan_free_desc;
 		vchan_init(&chan->vc, dma);
-
-		if (write) {
-			dt_region->paddr = dw->dt_region_wr[j].paddr;
-			dt_region->vaddr = dw->dt_region_wr[j].vaddr;
-			dt_region->sz = dw->dt_region_wr[j].sz;
-		} else {
-			dt_region->paddr = dw->dt_region_rd[j].paddr;
-			dt_region->vaddr = dw->dt_region_rd[j].vaddr;
-			dt_region->sz = dw->dt_region_rd[j].sz;
-		}
 
 		dw_edma_v0_core_device_config(chan);
 	}
