@@ -273,6 +273,22 @@ bool mhi_ep_queue_is_empty(struct mhi_ep_device *mhi_dev, enum dma_data_directio
 }
 EXPORT_SYMBOL_GPL(mhi_ep_queue_is_empty);
 
+static int mhi_ep_copy_from_device(struct mhi_ep_cntrl *mhi_cntrl,
+				   u64 pci_addr,
+				   void *memptr,
+				   size_t size)
+{
+	return mhi_cntrl->read_from_host(mhi_cntrl, pci_addr, memptr, size);
+}
+
+static int mhi_ep_copy_to_device(struct mhi_ep_cntrl *mhi_cntrl,
+				   void *memptr,
+				   u64 pci_addr,
+				   size_t size)
+{
+	return mhi_cntrl->write_to_host(mhi_cntrl, memptr, pci_addr, size);
+}
+
 static int mhi_ep_read_channel(struct mhi_ep_cntrl *mhi_cntrl,
 				struct mhi_ep_ring *ring,
 				struct mhi_result *result,
@@ -317,7 +333,7 @@ static int mhi_ep_read_channel(struct mhi_ep_cntrl *mhi_cntrl,
 		write_addr = result->buf_addr + write_offset;
 
 		dev_dbg(dev, "Reading %zd bytes from channel (%u)\n", tr_len, ring->ch_id);
-		ret = mhi_cntrl->read_from_host(mhi_cntrl, read_addr, write_addr, tr_len);
+		ret = mhi_ep_copy_from_device(mhi_cntrl, read_addr, write_addr, tr_len);
 		if (ret < 0) {
 			dev_err(&mhi_chan->mhi_dev->dev, "Error reading from channel\n");
 			return ret;
@@ -478,7 +494,7 @@ int mhi_ep_queue_skb(struct mhi_ep_device *mhi_dev, struct sk_buff *skb)
 		write_addr = MHI_TRE_DATA_GET_PTR(el);
 
 		dev_dbg(dev, "Writing %zd bytes to channel (%u)\n", tr_len, ring->ch_id);
-		ret = mhi_cntrl->write_to_host(mhi_cntrl, read_addr, write_addr, tr_len);
+		ret = mhi_ep_copy_to_device(mhi_cntrl, read_addr, write_addr, tr_len);
 		if (ret < 0) {
 			dev_err(dev, "Error writing to the channel\n");
 			goto err_exit;
