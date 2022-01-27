@@ -689,7 +689,7 @@ static int dw_edma_alloc_chan_resources(struct dma_chan *dchan)
 	if (chan->status != EDMA_ST_IDLE)
 		return -EBUSY;
 
-	pm_runtime_get(chan->chip->dev);
+	//pm_runtime_get(chan->chip->dev);
 
 	return 0;
 }
@@ -697,7 +697,7 @@ static int dw_edma_alloc_chan_resources(struct dma_chan *dchan)
 static void dw_edma_free_chan_resources(struct dma_chan *dchan)
 {
 	unsigned long timeout = jiffies + msecs_to_jiffies(5000);
-	struct dw_edma_chan *chan = dchan2dw_edma_chan(dchan);
+	//struct dw_edma_chan *chan = dchan2dw_edma_chan(dchan);
 	int ret;
 
 	while (time_before(jiffies, timeout)) {
@@ -711,7 +711,7 @@ static void dw_edma_free_chan_resources(struct dma_chan *dchan)
 		cpu_relax();
 	}
 
-	pm_runtime_put(chan->chip->dev);
+	//pm_runtime_put(chan->chip->dev);
 }
 
 static int dw_edma_channel_setup(struct dw_edma_chip *chip, bool write,
@@ -974,7 +974,7 @@ int dw_edma_probe(struct dw_edma_chip *chip)
 		goto err_irq_free;
 
 	/* Power management */
-	pm_runtime_enable(dev);
+	//pm_runtime_enable(dev);
 
 	/* Turn debugfs on */
 	dw_edma_v0_core_debugfs_on(chip);
@@ -1006,7 +1006,7 @@ int dw_edma_remove(struct dw_edma_chip *chip)
 		free_irq(dw->ops->irq_vector(dev, i), &dw->irq[i]);
 
 	/* Power management */
-	pm_runtime_disable(dev);
+	//pm_runtime_disable(dev);
 
 	/* Deregister eDMA device */
 	dma_async_device_unregister(&dw->edma);
