@@ -16,6 +16,7 @@
 #include <linux/irq.h>
 #include <linux/dma/edma.h>
 #include <linux/dma-mapping.h>
+#include <linux/of_dma.h>
 
 #include "dw-edma-core.h"
 #include "dw-edma-v0-core.h"
@@ -825,6 +826,19 @@ static int dw_edma_setup(struct dw_edma_chip *chip)
 
 	/* Register DMA device */
 	err = dma_async_device_register(dma);
+	if (err)
+		return err;
+
+	err = of_dma_controller_register(chip->dev->of_node,
+					 of_dma_xlate_by_chan_id,
+					 dma);
+	if (err)
+		goto err_unregister;
+
+	return 0;
+
+err_unregister:
+	dma_async_device_unregister(dma);
 
 	return err;
 }
@@ -1009,6 +1023,7 @@ int dw_edma_remove(struct dw_edma_chip *chip)
 	//pm_runtime_disable(dev);
 
 	/* Deregister eDMA device */
+	of_dma_controller_free(dev->of_node);
 	dma_async_device_unregister(&dw->edma);
 	list_for_each_entry_safe(chan, _chan, &dw->edma.channels,
 				 vc.chan.device_node) {
