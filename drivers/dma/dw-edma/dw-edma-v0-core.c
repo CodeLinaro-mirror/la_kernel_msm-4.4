@@ -53,35 +53,6 @@ static inline struct dw_edma_v0_regs __iomem *__dw_regs(struct dw_edma *dw)
 		SET_32(dw, rd_##name, value);		\
 	} while (0)
 
-#ifdef CONFIG_64BIT
-
-#define SET_64(dw, name, value)				\
-	writeq(value, &(__dw_regs(dw)->name))
-
-#define GET_64(dw, name)				\
-	readq(&(__dw_regs(dw)->name))
-
-#define SET_RW_64(dw, dir, name, value)			\
-	do {						\
-		if ((dir) == EDMA_DIR_WRITE)		\
-			SET_64(dw, wr_##name, value);	\
-		else					\
-			SET_64(dw, rd_##name, value);	\
-	} while (0)
-
-#define GET_RW_64(dw, dir, name)			\
-	((dir) == EDMA_DIR_WRITE			\
-	  ? GET_64(dw, wr_##name)			\
-	  : GET_64(dw, rd_##name))
-
-#define SET_BOTH_64(dw, name, value)			\
-	do {						\
-		SET_64(dw, wr_##name, value);		\
-		SET_64(dw, rd_##name, value);		\
-	} while (0)
-
-#endif /* CONFIG_64BIT */
-
 #define SET_COMPAT(dw, name, value)			\
 	writel(value, &(__dw_regs(dw)->type.unroll.name))
 
@@ -164,8 +135,6 @@ static inline u32 readl_ch(struct dw_edma *dw, enum dw_edma_dir dir, u16 ch,
 #define SET_LL_32(ll, value) \
 	writel(value, ll)
 
-#ifdef CONFIG_64BIT
-
 static inline void writeq_ch(struct dw_edma *dw, enum dw_edma_dir dir, u16 ch,
 			     u64 value, void __iomem *addr)
 {
@@ -181,49 +150,30 @@ static inline void writeq_ch(struct dw_edma *dw, enum dw_edma_dir dir, u16 ch,
 
 		writel(viewport_sel,
 		       &(__dw_regs(dw)->type.legacy.viewport_sel));
-		writeq(value, addr);
+		/* Always use 32-bit writes here, 64-bit write is unaligned */
+		writel(lower_32_bits(value), addr);
+		writel(upper_32_bits(value), addr + 4);
 
 		raw_spin_unlock_irqrestore(&dw->lock, flags);
 	} else {
-		writeq(value, addr);
+		/* Always use 32-bit writes here, 64-bit write is unaligned */
+		writel(lower_32_bits(value), addr);
+		writel(upper_32_bits(value), addr + 4);
 	}
 }
 
-static inline u64 readq_ch(struct dw_edma *dw, enum dw_edma_dir dir, u16 ch,
-			   const void __iomem *addr)
-{
-	u32 value;
-
-	if (dw->mf == EDMA_MF_EDMA_LEGACY) {
-		u32 viewport_sel;
-		unsigned long flags;
-
-		raw_spin_lock_irqsave(&dw->lock, flags);
-
-		viewport_sel = FIELD_PREP(EDMA_V0_VIEWPORT_MASK, ch);
-		if (dir == EDMA_DIR_READ)
-			viewport_sel |= BIT(31);
-
-		writel(viewport_sel,
-		       &(__dw_regs(dw)->type.legacy.viewport_sel));
-		value = readq(addr);
-
-		raw_spin_unlock_irqrestore(&dw->lock, flags);
-	} else {
-		value = readq(addr);
-	}
-
-	return value;
-}
-
-#define SET_CH_64(dw, dir, ch, name, value) \
-	writeq_ch(dw, dir, ch, value, &(__dw_ch_regs(dw, dir, ch)->name))
-
-#define GET_CH_64(dw, dir, ch, name) \
-	readq_ch(dw, dir, ch, &(__dw_ch_regs(dw, dir, ch)->name))
+#ifdef CONFIG_64BIT
 
 #define SET_LL_64(ll, value) \
-	writeq(value, ll)
+	writeq(value, &(ll)->reg)
+
+#else
+
+#define SET_LL_64(ll, value) \
+	do { \
+		writel(lower_32_bits(value), &(ll)->lsb); \
+		writel(upper_32_bits(value), &(ll)->msb); \
+	} while (0);
 
 #endif /* CONFIG_64BIT */
 
@@ -322,19 +272,9 @@ static void dw_edma_v0_core_write_chunk(struct dw_edma_chunk *chunk)
 		/* Transfer size */
 		SET_LL_32(&lli[i].transfer_size, child->sz);
 		/* SAR */
-		#ifdef CONFIG_64BIT
-			SET_LL_64(&lli[i].sar.reg, child->sar);
-		#else /* CONFIG_64BIT */
-			SET_LL_32(&lli[i].sar.lsb, lower_32_bits(child->sar));
-			SET_LL_32(&lli[i].sar.msb, upper_32_bits(child->sar));
-		#endif /* CONFIG_64BIT */
+		SET_LL_64(&lli[i].sar, child->sar);
 		/* DAR */
-		#ifdef CONFIG_64BIT
-			SET_LL_64(&lli[i].dar.reg, child->dar);
-		#else /* CONFIG_64BIT */
-			SET_LL_32(&lli[i].dar.lsb, lower_32_bits(child->dar));
-			SET_LL_32(&lli[i].dar.msb, upper_32_bits(child->dar));
-		#endif /* CONFIG_64BIT */
+		SET_LL_64(&lli[i].dar, child->dar);
 		i++;
 	}
 
@@ -346,12 +286,7 @@ static void dw_edma_v0_core_write_chunk(struct dw_edma_chunk *chunk)
 	/* Channel control */
 	SET_LL_32(&llp->control, control);
 	/* Linked list */
-	#ifdef CONFIG_64BIT
-		SET_LL_64(&llp->llp.reg, chunk->ll_region.paddr);
-	#else /* CONFIG_64BIT */
-		SET_LL_32(&llp->llp.lsb, lower_32_bits(chunk->ll_region.paddr));
-		SET_LL_32(&llp->llp.msb, upper_32_bits(chunk->ll_region.paddr));
-	#endif /* CONFIG_64BIT */
+	SET_LL_64(&llp->llp, chunk->ll_region.paddr);
 }
 
 void dw_edma_v0_core_start(struct dw_edma_chunk *chunk, bool first)
