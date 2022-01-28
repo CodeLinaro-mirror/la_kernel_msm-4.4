@@ -227,6 +227,10 @@ struct dw_pcie_ep_func {
 	u8			func_no;
 	u8			msi_cap;	/* MSI capability offset */
 	u8			msix_cap;	/* MSI-X capability offset */
+
+	u64			cached_msg_addr;
+	void __iomem		*msi_mem;
+	phys_addr_t		msi_mem_phys;
 };
 
 struct dw_pcie_ep {
@@ -240,8 +244,6 @@ struct dw_pcie_ep {
 	phys_addr_t		*outbound_addr;
 	unsigned long		*ib_window_map;
 	unsigned long		*ob_window_map;
-	void __iomem		*msi_mem;
-	phys_addr_t		msi_mem_phys;
 	struct pci_epf_bar	*epf_bar[PCI_STD_NUM_BARS];
 	bool			core_init_notifier;
 };

@@ -527,14 +527,22 @@ int dw_pcie_ep_raise_msi_irq(struct dw_pcie_ep *ep, u8 func_no,
 	aligned_offset = msg_addr_lower & (epc->mem->window.page_size - 1);
 	msg_addr = ((u64)msg_addr_upper) << 32 |
 			(msg_addr_lower & ~aligned_offset);
-	ret = dw_pcie_ep_map_addr(epc, func_no, 0, ep->msi_mem_phys, msg_addr,
-				  epc->mem->window.page_size);
-	if (ret)
-		return ret;
 
-	writel(msg_data | (interrupt_num - 1), ep->msi_mem + aligned_offset);
+	if (msg_addr != ep_func->cached_msg_addr) {
+		if (ep_func->cached_msg_addr)
+			dw_pcie_ep_unmap_addr(epc, func_no, 0, ep_func->msi_mem_phys);
 
-	dw_pcie_ep_unmap_addr(epc, func_no, 0, ep->msi_mem_phys);
+		ep_func->cached_msg_addr = 0;
+
+		ret = dw_pcie_ep_map_addr(epc, func_no, 0, ep_func->msi_mem_phys, msg_addr,
+					  epc->mem->window.page_size);
+		if (ret)
+			return ret;
+
+		ep_func->cached_msg_addr = msg_addr;
+	}
+
+	writel(msg_data | (interrupt_num - 1), ep_func->msi_mem + aligned_offset);
 
 	return 0;
 }
@@ -596,14 +604,21 @@ int dw_pcie_ep_raise_msix_irq(struct dw_pcie_ep *ep, u8 func_no,
 	}
 
 	aligned_offset = msg_addr & (epc->mem->window.page_size - 1);
-	ret = dw_pcie_ep_map_addr(epc, func_no, 0, ep->msi_mem_phys, msg_addr,
-				  epc->mem->window.page_size);
-	if (ret)
-		return ret;
 
-	writel(msg_data, ep->msi_mem + aligned_offset);
+	msg_addr &= ~aligned_offset;
+	if (msg_addr != ep_func->cached_msg_addr) {
+		ep_func->cached_msg_addr = 0;
 
-	dw_pcie_ep_unmap_addr(epc, func_no, 0, ep->msi_mem_phys);
+		dw_pcie_ep_unmap_addr(epc, func_no, 0, ep_func->msi_mem_phys);
+		ret = dw_pcie_ep_map_addr(epc, func_no, 0, ep_func->msi_mem_phys, msg_addr,
+					  epc->mem->window.page_size);
+		if (ret)
+			return ret;
+
+		ep_func->cached_msg_addr = msg_addr;
+	}
+
+	writel(msg_data, ep_func->msi_mem + aligned_offset);
 
 	return 0;
 }
@@ -611,9 +626,18 @@ int dw_pcie_ep_raise_msix_irq(struct dw_pcie_ep *ep, u8 func_no,
 void dw_pcie_ep_exit(struct dw_pcie_ep *ep)
 {
 	struct pci_epc *epc = ep->epc;
+	struct dw_pcie_ep_func *ep_func;
 
-	pci_epc_mem_free_addr(epc, ep->msi_mem_phys, ep->msi_mem,
-			      epc->mem->window.page_size);
+	list_for_each_entry(ep_func, &ep->func_list, list) {
+		if (!ep_func->msi_mem)
+			continue;
+
+		if (ep_func->cached_msg_addr)
+			dw_pcie_ep_unmap_addr(epc, ep_func->func_no, 0, ep_func->msi_mem_phys);
+
+		pci_epc_mem_free_addr(epc, ep_func->msi_mem_phys, ep_func->msi_mem,
+				      epc->mem->window.page_size);
+	}
 
 	pci_epc_mem_exit(epc);
 }
@@ -671,7 +695,7 @@ static int dw_pcie_iatu_config(struct dw_pcie_ep *ep)
 static int dw_pcie_ep_func_init(struct dw_pcie_ep *ep)
 {
 	struct dw_pcie *pci = to_dw_pcie_from_ep(ep);
-	struct dw_pcie_ep_func *ep_func;
+	struct dw_pcie_ep_func *ep_func, *temp;
 	struct pci_epc *epc = ep->epc;
 	struct device *dev = pci->dev;
 	u8 func_no;
@@ -687,10 +711,28 @@ static int dw_pcie_ep_func_init(struct dw_pcie_ep *ep)
 		ep_func->msix_cap = dw_pcie_ep_find_capability(ep, func_no,
 							       PCI_CAP_ID_MSIX);
 
+		ep_func->msi_mem = pci_epc_mem_alloc_addr(ep->epc, &ep_func->msi_mem_phys,
+				ep->epc->mem->window.page_size);
+		if (!ep_func->msi_mem) {
+			dev_err(dev, "Failed to reserve memory for MSI/MSI-X\n");
+			goto err_ep_msi;
+		}
+
 		list_add_tail(&ep_func->list, &ep->func_list);
 	}
 
 	return 0;
+
+err_ep_msi:
+	list_for_each_entry_safe(ep_func, temp, &ep->func_list, list) {
+		if (ep_func->msi_mem)
+			pci_epc_mem_free_addr(ep->epc, ep_func->msi_mem_phys, ep_func->msi_mem,
+					      ep->epc->mem->window.page_size);
+		list_del(&ep_func->list);
+		devm_kfree(dev, ep_func);
+	}
+
+	return -ENOMEM;
 }
 
 int dw_pcie_ep_init_complete(struct dw_pcie_ep *ep)
@@ -743,6 +785,7 @@ int dw_pcie_ep_init_complete(struct dw_pcie_ep *ep)
 	dw_pcie_dbi_ro_wr_dis(pci);
 
 	return 0;
+
 }
 EXPORT_SYMBOL_GPL(dw_pcie_ep_init_complete);
 
@@ -812,15 +855,6 @@ int dw_pcie_ep_init(struct dw_pcie_ep *ep)
 	if (ret < 0)
 		epc->max_functions = 1;
 
-	if (!ep->core_init_notifier) {
-		ret = dw_pcie_ep_func_init(ep);
-		if (ret)
-			return ret;
-
-		if (ep->ops->ep_init)
-			ep->ops->ep_init(ep);
-	}
-
 	ret = pci_epc_mem_init(epc, ep->phys_base, ep->addr_size,
 			       ep->page_size);
 	if (ret < 0) {
@@ -828,16 +862,26 @@ int dw_pcie_ep_init(struct dw_pcie_ep *ep)
 		return ret;
 	}
 
-	ep->msi_mem = pci_epc_mem_alloc_addr(epc, &ep->msi_mem_phys,
-					     epc->mem->window.page_size);
-	if (!ep->msi_mem) {
-		dev_err(dev, "Failed to reserve memory for MSI/MSI-X\n");
-		return -ENOMEM;
+	if (!ep->core_init_notifier) {
+		ret = dw_pcie_ep_func_init(ep);
+		if (ret)
+			goto err_mem_exit;
+
+		if (ep->ops->ep_init)
+			ep->ops->ep_init(ep);
 	}
 
-	if (!ep->core_init_notifier)
-		return dw_pcie_ep_init_complete(ep);
+	if (!ep->core_init_notifier) {
+		ret = dw_pcie_ep_init_complete(ep);
+		if (ret)
+			goto err_mem_exit;
+	}
 
 	return 0;
+
+err_mem_exit:
+	pci_epc_mem_exit(epc);
+
+	return ret;
 }
 EXPORT_SYMBOL_GPL(dw_pcie_ep_init);

@@ -1646,6 +1646,7 @@ static void pex_ep_event_pex_rst_deassert(struct tegra194_pcie *pcie)
 {
 	struct dw_pcie *pci = &pcie->pci;
 	struct dw_pcie_ep *ep = &pci->ep;
+	struct dw_pcie_ep_func *ep_func = list_first_entry(&ep->func_list, struct dw_pcie_ep_func, list);
 	struct device *dev = pcie->dev;
 	u32 val;
 	int ret;
@@ -1768,10 +1769,10 @@ static void pex_ep_event_pex_rst_deassert(struct tegra194_pcie *pcie)
 						      PCI_CAP_ID_EXP);
 	clk_set_rate(pcie->core_clk, GEN4_CORE_CLK_FREQ);
 
-	val = (ep->msi_mem_phys & MSIX_ADDR_MATCH_LOW_OFF_MASK);
+	val = (ep_func->msi_mem_phys & MSIX_ADDR_MATCH_LOW_OFF_MASK);
 	val |= MSIX_ADDR_MATCH_LOW_OFF_EN;
 	dw_pcie_writel_dbi(pci, MSIX_ADDR_MATCH_LOW_OFF, val);
-	val = (upper_32_bits(ep->msi_mem_phys) & MSIX_ADDR_MATCH_HIGH_OFF_MASK);
+	val = (upper_32_bits(ep_func->msi_mem_phys) & MSIX_ADDR_MATCH_HIGH_OFF_MASK);
 	dw_pcie_writel_dbi(pci, MSIX_ADDR_MATCH_HIGH_OFF, val);
 
 	ret = dw_pcie_ep_init_complete(ep);
@@ -1839,11 +1840,16 @@ static int tegra_pcie_ep_raise_msi_irq(struct tegra194_pcie *pcie, u16 irq)
 	return 0;
 }
 
-static int tegra_pcie_ep_raise_msix_irq(struct tegra194_pcie *pcie, u16 irq)
+static int tegra_pcie_ep_raise_msix_irq(struct tegra194_pcie *pcie, u8 func_no, u16 irq)
 {
 	struct dw_pcie_ep *ep = &pcie->pci.ep;
+	struct dw_pcie_ep_func *ep_func;
 
-	writel(irq, ep->msi_mem);
+	ep_func = dw_pcie_ep_get_func_from_ep(ep, func_no);
+	if (!ep_func || !ep_func->msix_cap)
+		return -EINVAL;
+
+	writel(irq, ep_func->msi_mem);
 
 	return 0;
 }
@@ -1863,7 +1869,7 @@ static int tegra_pcie_ep_raise_irq(struct dw_pcie_ep *ep, u8 func_no,
 		return tegra_pcie_ep_raise_msi_irq(pcie, interrupt_num);
 
 	case PCI_EPC_IRQ_MSIX:
-		return tegra_pcie_ep_raise_msix_irq(pcie, interrupt_num);
+		return tegra_pcie_ep_raise_msix_irq(pcie, func_no, interrupt_num);
 
 	default:
 		dev_err(pci->dev, "Unknown IRQ type\n");
