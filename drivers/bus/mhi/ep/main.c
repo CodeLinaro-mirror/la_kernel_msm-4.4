@@ -1141,17 +1141,6 @@ static void mhi_ep_release_device(struct device *dev)
 	if (mhi_dev->dev_type == MHI_DEVICE_CONTROLLER)
 		mhi_dev->mhi_cntrl->mhi_dev = NULL;
 
-	/*
-	 * We need to set the mhi_chan->mhi_dev to NULL here since the MHI
-	 * devices for the channels will only get created in mhi_ep_create_device()
-	 * if the mhi_dev associated with it is NULL.
-	 */
-	if (mhi_dev->ul_chan)
-		mhi_dev->ul_chan->mhi_dev = NULL;
-
-	if (mhi_dev->dl_chan)
-		mhi_dev->dl_chan->mhi_dev = NULL;
-
 	kfree(mhi_dev);
 }
 
@@ -1251,11 +1240,15 @@ static int mhi_ep_destroy_device(struct device *dev, void *data)
 	ul_chan = mhi_dev->ul_chan;
 	dl_chan = mhi_dev->dl_chan;
 
-	if (ul_chan)
+	if (ul_chan) {
 		put_device(&ul_chan->mhi_dev->dev);
+		ul_chan->mhi_dev = NULL;
+	}
 
-	if (dl_chan)
+	if (dl_chan) {
 		put_device(&dl_chan->mhi_dev->dev);
+		dl_chan->mhi_dev = NULL;
+	}
 
 	dev_dbg(&mhi_cntrl->mhi_dev->dev, "Destroying device for chan:%s\n",
 		 mhi_dev->name);
