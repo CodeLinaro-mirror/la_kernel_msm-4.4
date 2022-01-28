@@ -371,7 +371,8 @@ void mhi_create_devices(struct mhi_controller *mhi_cntrl)
 		if (!mhi_chan->configured || mhi_chan->mhi_dev ||
 		    !(mhi_chan->ee_mask & BIT(mhi_cntrl->ee)))
 			continue;
-		mhi_dev = mhi_alloc_device(mhi_cntrl);
+		/* for MHI client devices, parent is the MHI controller device */
+		mhi_dev = mhi_alloc_device(mhi_cntrl, &mhi_cntrl->mhi_dev->dev);
 		if (IS_ERR(mhi_dev))
 			return;
 
