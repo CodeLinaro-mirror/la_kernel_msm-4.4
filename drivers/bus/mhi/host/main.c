@@ -311,6 +311,7 @@ int mhi_destroy_device(struct device *dev, void *data)
 			return 0;
 
 		put_device(&ul_chan->mhi_dev->dev);
+		ul_chan->mhi_dev = NULL;
 	}
 
 	if (dl_chan) {
@@ -318,6 +319,7 @@ int mhi_destroy_device(struct device *dev, void *data)
 			return 0;
 
 		put_device(&dl_chan->mhi_dev->dev);
+		dl_chan->mhi_dev = NULL;
 	}
 
 	dev_dbg(&mhi_cntrl->mhi_dev->dev, "destroy device for chan:%s\n",
