@@ -1240,6 +1240,9 @@ static int mhi_ep_destroy_device(struct device *dev, void *data)
 	ul_chan = mhi_dev->ul_chan;
 	dl_chan = mhi_dev->dl_chan;
 
+	/* Notify the client and remove the device from MHI bus */
+	device_del(dev);
+
 	if (ul_chan) {
 		put_device(&ul_chan->mhi_dev->dev);
 		ul_chan->mhi_dev = NULL;
@@ -1253,8 +1256,6 @@ static int mhi_ep_destroy_device(struct device *dev, void *data)
 	dev_dbg(&mhi_cntrl->mhi_dev->dev, "Destroying device for chan:%s\n",
 		 mhi_dev->name);
 
-	/* Notify the client and remove the device from MHI bus */
-	device_del(dev);
 	put_device(dev);
 
 	return 0;
@@ -1426,6 +1427,7 @@ void mhi_ep_unregister_controller(struct mhi_ep_cntrl *mhi_cntrl)
 
 	device_del(&mhi_dev->dev);
 	put_device(&mhi_dev->dev);
+	mhi_cntrl->mhi_dev = NULL;
 
 	ida_free(&mhi_ep_cntrl_ida, mhi_cntrl->index);
 }
