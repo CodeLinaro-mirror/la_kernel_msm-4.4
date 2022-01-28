@@ -1043,6 +1043,7 @@ void mhi_unregister_controller(struct mhi_controller *mhi_cntrl)
 
 	device_del(&mhi_dev->dev);
 	put_device(&mhi_dev->dev);
+	mhi_cntrl->mhi_dev = NULL;
 
 	ida_free(&mhi_controller_ida, mhi_cntrl->index);
 }
