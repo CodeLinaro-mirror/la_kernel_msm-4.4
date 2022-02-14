@@ -667,21 +667,14 @@ static int qcom_pcie_ep_probe(struct platform_device *pdev)
 		return ret;
 
 	ret = dw_pcie_ep_init(&pcie_ep->pci.ep);
-	if (ret) {
-		dev_err(dev, "Failed to initialize endpoint: %d\n", ret);
-		goto err_disable_resources;
-	}
+	if (ret)
+		return dev_err_probe(dev, ret, "Failed to initialize endpoint\n");
 
 	ret = qcom_pcie_ep_enable_irq_resources(pdev, pcie_ep);
 	if (ret)
-		goto err_disable_resources;
+		return dev_err_probe(dev, ret, "Failed to enable endpoint interrupts\n");
 
 	return 0;
-
-err_disable_resources:
-	qcom_pcie_disable_resources(pcie_ep);
-
-	return ret;
 }
 
 static int qcom_pcie_ep_remove(struct platform_device *pdev)
