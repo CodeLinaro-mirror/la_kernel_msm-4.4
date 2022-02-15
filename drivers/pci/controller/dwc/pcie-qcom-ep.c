@@ -444,6 +444,13 @@ static void qcom_pcie_perst_assert(struct dw_pcie *pci)
 		return;
 	}
 
+	/* In case PERST# assert comes before Link down, trigger it manually */
+	if (pcie_ep->link_status != QCOM_PCIE_EP_LINK_DOWN) {
+		dev_info(dev, "Sending link disable event\n");
+		pcie_ep->link_status = QCOM_PCIE_EP_LINK_DOWN;
+		pci_epc_linkdown(pci->ep.epc);
+	}
+
 	if (pcie_ep->edma) {
 		ret = dw_edma_remove(pcie_ep->edma);
 		if (ret < 0)
@@ -600,8 +607,7 @@ static irqreturn_t qcom_pcie_ep_global_irq_thread(int irq, void *data)
 
 	if (FIELD_GET(PARF_INT_ALL_LINK_DOWN, status)) {
 		dev_info(dev, "Received Linkdown event\n");
-		pcie_ep->link_status = QCOM_PCIE_EP_LINK_DOWN;
-		pci_epc_linkdown(pci->ep.epc);
+		/* PERST# assert can come before Link down, handle both events in PERST */
 	} else if (FIELD_GET(PARF_INT_ALL_BME, status)) {
 		dev_info(dev, "Received BME event. Link is enabled!\n");
 		pcie_ep->link_status = QCOM_PCIE_EP_LINK_ENABLED;
