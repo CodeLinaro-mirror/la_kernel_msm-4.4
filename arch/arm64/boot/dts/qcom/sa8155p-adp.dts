@@ -386,8 +386,8 @@
 	snps,ptp-ref-clk-rate = <250000000>;
 	snps,ptp-req-clk-rate = <96000000>;
 
-	//snps,mtl-rx-config = <&mtl_rx_setup>;
-	//snps,mtl-tx-config = <&mtl_tx_setup>;
+	snps,mtl-rx-config = <&mtl_rx_setup>;
+	snps,mtl-tx-config = <&mtl_tx_setup>;
 
 	pinctrl-names = "default";
 	pinctrl-0 = <&ethernet_defaults>;
@@ -404,11 +404,8 @@
 		rgmii_phy: phy@7 {
 			reg = <0x7>;
 
-			reset-assert-us = <10000>;
-			reset-deassert-us = <30000>;
 			interrupt-parent = <&tlmm>;
 			interrupts-extended = <&tlmm 124 IRQ_TYPE_EDGE_FALLING>; /* phy intr */
-
 			device_type = "ethernet-phy";
 			compatible = "ethernet-phy-ieee802.3-c22";
 		};
@@ -534,14 +531,14 @@
 		};
 
 		phy-intr {
-			pins = 	"gpio124";
+			pins = "gpio124";
 			function = "emac_phy";
 			bias-disable;
 			drive-strength = <8>;
 		};
 
 		pps {
-			pins = 	"gpio81";
+			pins = "gpio81";
 			function = "emac_pps";
 			bias-disable;
 			drive-strength = <8>;
