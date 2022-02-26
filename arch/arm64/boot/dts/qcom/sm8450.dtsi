@@ -621,6 +621,19 @@
 			ranges;
 			status = "disabled";
 
+			i2c6: i2c@998000 {
+				compatible = "qcom,geni-i2c";
+				reg = <0 0x00998000 0 0x4000>;
+				clock-names = "se";
+				clocks = <&gcc GCC_QUPV3_WRAP0_S6_CLK>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&qup_i2c6_data_clk>;
+				interrupts = <GIC_SPI 607 IRQ_TYPE_LEVEL_HIGH>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				status = "disabled";
+			};
+
 			uart7: serial@99c000 {
 				compatible = "qcom,geni-debug-uart";
 				reg = <0 0x0099c000 0 0x4000>;
@@ -1103,6 +1116,13 @@
 					drive-strength = <2>;
 					bias-pull-up;
 				};
+			};
+
+			qup_i2c6_data_clk: qup-i2c6-data-clk {
+				pins = "gpio20", "gpio21";
+				function = "qup6";
+				drive-strength = <2>;
+				bias-pull-up;
 			};
 
 			qup_i2c13_data_clk: qup-i2c13-data-clk {
