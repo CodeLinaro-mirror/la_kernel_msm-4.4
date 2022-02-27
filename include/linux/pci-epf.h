@@ -20,6 +20,8 @@ enum pci_epc_interface_type;
 enum pci_notify_event {
 	CORE_INIT,
 	LINK_UP,
+	LINK_DOWN,
+	BME,
 };
 
 enum pci_barno {
