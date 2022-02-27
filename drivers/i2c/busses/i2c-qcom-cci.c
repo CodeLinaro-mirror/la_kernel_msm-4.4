@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 // Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
-// Copyright (c) 2017-20 Linaro Limited.
+// Copyright (c) 2017-2022 Linaro Limited.
 
 #include <linux/clk.h>
 #include <linux/completion.h>
@@ -11,6 +11,7 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+#include <linux/regulator/consumer.h>
 
 #define CCI_HW_VERSION				0x0
 #define CCI_RESET_CMD				0x004
@@ -480,6 +481,20 @@ static void cci_disable_clocks(struct cci *cci)
 static int __maybe_unused cci_suspend_runtime(struct device *dev)
 {
 	struct cci *cci = dev_get_drvdata(dev);
+	struct regulator *bus_regulator;
+	unsigned int i;
+
+	for (i = 0; i < cci->data->num_masters; i++) {
+		if (!cci->master[i].cci)
+			continue;
+
+		bus_regulator = cci->master[i].adap.bus_regulator;
+		if (!bus_regulator)
+			continue;
+
+		if (regulator_is_enabled(bus_regulator) > 0)
+			regulator_disable(bus_regulator);
+	}
 
 	cci_disable_clocks(cci);
 	return 0;
@@ -488,11 +503,29 @@ static int __maybe_unused cci_suspend_runtime(struct device *dev)
 static int __maybe_unused cci_resume_runtime(struct device *dev)
 {
 	struct cci *cci = dev_get_drvdata(dev);
+	struct regulator *bus_regulator;
+	unsigned int i;
 	int ret;
 
 	ret = cci_enable_clocks(cci);
 	if (ret)
 		return ret;
+
+	for (i = 0; i < cci->data->num_masters; i++) {
+		if (!cci->master[i].cci)
+			continue;
+
+		bus_regulator = cci->master[i].adap.bus_regulator;
+		if (!bus_regulator)
+			continue;
+
+		if (!regulator_is_enabled(bus_regulator)) {
+			ret = regulator_enable(bus_regulator);
+			if (ret)
+				dev_err(dev, "failed to enable regulator: %d\n",
+					ret);
+		}
+	}
 
 	cci_init(cci);
 	return 0;
@@ -539,44 +572,6 @@ static int cci_probe(struct platform_device *pdev)
 	cci->data = device_get_match_data(dev);
 	if (!cci->data)
 		return -ENOENT;
-
-	for_each_available_child_of_node(dev->of_node, child) {
-		u32 idx;
-
-		ret = of_property_read_u32(child, "reg", &idx);
-		if (ret) {
-			dev_err(dev, "%pOF invalid 'reg' property", child);
-			continue;
-		}
-
-		if (idx >= cci->data->num_masters) {
-			dev_err(dev, "%pOF invalid 'reg' value: %u (max is %u)",
-				child, idx, cci->data->num_masters - 1);
-			continue;
-		}
-
-		cci->master[idx].adap.quirks = &cci->data->quirks;
-		cci->master[idx].adap.algo = &cci_algo;
-		cci->master[idx].adap.dev.parent = dev;
-		cci->master[idx].adap.dev.of_node = of_node_get(child);
-		cci->master[idx].master = idx;
-		cci->master[idx].cci = cci;
-
-		i2c_set_adapdata(&cci->master[idx].adap, &cci->master[idx]);
-		snprintf(cci->master[idx].adap.name,
-			 sizeof(cci->master[idx].adap.name), "Qualcomm-CCI");
-
-		cci->master[idx].mode = I2C_MODE_STANDARD;
-		ret = of_property_read_u32(child, "clock-frequency", &val);
-		if (!ret) {
-			if (val == I2C_MAX_FAST_MODE_FREQ)
-				cci->master[idx].mode = I2C_MODE_FAST;
-			else if (val == I2C_MAX_FAST_MODE_PLUS_FREQ)
-				cci->master[idx].mode = I2C_MODE_FAST_PLUS;
-		}
-
-		init_completion(&cci->master[idx].irq_complete);
-	}
 
 	/* Memory */
 
@@ -630,24 +625,76 @@ static int cci_probe(struct platform_device *pdev)
 	val = readl(cci->base + CCI_HW_VERSION);
 	dev_dbg(dev, "CCI HW version = 0x%08x", val);
 
+	for_each_available_child_of_node(dev->of_node, child) {
+		struct regulator *bus_regulator;
+		struct cci_master *master;
+		u32 idx;
+
+		ret = of_property_read_u32(child, "reg", &idx);
+		if (ret) {
+			dev_err(dev, "%pOF invalid 'reg' property", child);
+			continue;
+		}
+
+		if (idx >= cci->data->num_masters) {
+			dev_err(dev, "%pOF invalid 'reg' value: %u (max is %u)",
+				child, idx, cci->data->num_masters - 1);
+			continue;
+		}
+
+		master = &cci->master[idx];
+		master->adap.quirks = &cci->data->quirks;
+		master->adap.algo = &cci_algo;
+		master->adap.dev.parent = dev;
+		master->adap.dev.of_node = of_node_get(child);
+		master->master = idx;
+		master->cci = cci;
+
+		i2c_set_adapdata(&master->adap, master);
+		snprintf(master->adap.name,
+			 sizeof(master->adap.name), "Qualcomm-CCI");
+
+		master->mode = I2C_MODE_STANDARD;
+		ret = of_property_read_u32(child, "clock-frequency", &val);
+		if (!ret) {
+			if (val == I2C_MAX_FAST_MODE_FREQ)
+				master->mode = I2C_MODE_FAST;
+			else if (val == I2C_MAX_FAST_MODE_PLUS_FREQ)
+				master->mode = I2C_MODE_FAST_PLUS;
+		}
+
+		init_completion(&master->irq_complete);
+
+		ret = i2c_add_adapter(&master->adap);
+		if (ret < 0) {
+			of_node_put(child);
+			master->cci = NULL;
+			goto error_i2c;
+		}
+
+		/*
+		 * It might be possible to find an optional vbus supply, but
+		 * it requires to pass the registration of an I2C adapter
+		 * device and its association with a bus device tree node.
+		 */
+		bus_regulator = devm_regulator_get_optional(&master->adap.dev,
+							    "vbus");
+		if (IS_ERR(bus_regulator)) {
+			ret = PTR_ERR(bus_regulator);
+			if (ret == -EPROBE_DEFER)
+				goto error_i2c;
+			bus_regulator = NULL;
+		}
+		master->adap.bus_regulator = bus_regulator;
+	}
+
 	ret = cci_reset(cci);
 	if (ret < 0)
-		goto error;
+		goto error_i2c;
 
 	ret = cci_init(cci);
 	if (ret < 0)
-		goto error;
-
-	for (i = 0; i < cci->data->num_masters; i++) {
-		if (!cci->master[i].cci)
-			continue;
-
-		ret = i2c_add_adapter(&cci->master[i].adap);
-		if (ret < 0) {
-			of_node_put(cci->master[i].adap.dev.of_node);
-			goto error_i2c;
-		}
-	}
+		goto error_i2c;
 
 	pm_runtime_set_autosuspend_delay(dev, MSEC_PER_SEC);
 	pm_runtime_use_autosuspend(dev);
@@ -657,13 +704,12 @@ static int cci_probe(struct platform_device *pdev)
 	return 0;
 
 error_i2c:
-	for (--i ; i >= 0; i--) {
+	for (i = 0; i < cci->data->num_masters; i++) {
 		if (cci->master[i].cci) {
 			i2c_del_adapter(&cci->master[i].adap);
 			of_node_put(cci->master[i].adap.dev.of_node);
 		}
 	}
-error:
 	disable_irq(cci->irq);
 disable_clocks:
 	cci_disable_clocks(cci);
@@ -776,6 +822,7 @@ static const struct of_device_id cci_dt_match[] = {
 	{ .compatible = "qcom,msm8996-cci", .data = &cci_v2_data},
 	{ .compatible = "qcom,sdm845-cci", .data = &cci_v2_data},
 	{ .compatible = "qcom,sm8250-cci", .data = &cci_v2_data},
+	{ .compatible = "qcom,sm8450-cci", .data = &cci_v2_data},
 	{}
 };
 MODULE_DEVICE_TABLE(of, cci_dt_match);
