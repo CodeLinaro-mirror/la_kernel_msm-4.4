@@ -102,6 +102,7 @@ config DRM_PANEL_SIMPLE
 config DRM_PANEL_EDP
 	tristate "support for simple Embedded DisplayPort panels"
 	depends on OF
+	depends on DRM_KMS_HELPER
 	depends on BACKLIGHT_CLASS_DEVICE
 	depends on PM
 	depends on DRM_KMS_HELPER
