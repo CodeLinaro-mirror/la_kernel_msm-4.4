@@ -110,6 +110,18 @@ patternProperties:
       Each device node of QMP phy is required to have as many child nodes as
       the number of lanes the PHY has.
     properties:
+      reg:
+        minItems: 1
+        maxItems: 6
+        description: |
+          List of offset and length pairs of register sets for PHY blocks.
+          There are two possible cases::
+            - tx, rx, pcs and pcs_misc.
+            - tx, rx, pcs, tx2, rx2 and pcs_misc.
+
+      "#phy-cells":
+        const: 0
+
       "#clock-cells":
         enum: [ 0, 1, 2 ]
 
