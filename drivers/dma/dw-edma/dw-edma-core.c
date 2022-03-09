@@ -553,6 +553,15 @@ dw_edma_device_prep_interleaved_dma(struct dma_chan *dchan,
 	return dw_edma_device_transfer(&xfer);
 }
 
+/* Override the generic DMA slave channel direction with per-channel specific one */
+static void dw_edma_device_caps(struct dma_chan *dchan, struct dma_slave_caps *caps)
+{
+	struct dw_edma_chan *chan = dchan2dw_edma_chan(dchan);
+
+	caps->directions = (chan->dir == EDMA_DIR_WRITE) ? BIT(DMA_MEM_TO_DEV) :
+			    BIT(DMA_DEV_TO_MEM);
+}
+
 static void dw_edma_done_interrupt(struct dw_edma_chan *chan)
 {
 	struct dw_edma_desc *desc;
@@ -820,6 +829,7 @@ static int dw_edma_channel_setup(struct dw_edma_chip *chip, bool write,
 	dma->device_prep_slave_sg = dw_edma_device_prep_slave_sg;
 	dma->device_prep_dma_cyclic = dw_edma_device_prep_dma_cyclic;
 	dma->device_prep_interleaved_dma = dw_edma_device_prep_interleaved_dma;
+	dma->device_caps = dw_edma_device_caps;
 
 	dma_set_max_seg_size(dma->dev, U32_MAX);
 
