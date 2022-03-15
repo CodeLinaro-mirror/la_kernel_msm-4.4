@@ -193,9 +193,9 @@ struct tee_ioctl_buf_data {
  * @b: if a memref, size of the buffer, else a value parameter
  * @c: if a memref, shared memory identifier, else a value parameter
  *
- * @attr & TEE_PARAM_ATTR_TYPE_MASK indicates if memref or value is used in
- * the union. TEE_PARAM_ATTR_TYPE_VALUE_* indicates value and
- * TEE_PARAM_ATTR_TYPE_MEMREF_* indicates memref. TEE_PARAM_ATTR_TYPE_NONE
+ * @attr & TEE_IOCTL_PARAM_ATTR_TYPE_MASK indicates if memref or value is used in
+ * the union. TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_* indicates value and
+ * TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_* indicates memref. TEE_IOCTL_PARAM_ATTR_TYPE_NONE
  * indicates that none of the members are used.
  *
  * Shared memory is allocated with TEE_IOC_SHM_ALLOC which returns an
@@ -282,7 +282,7 @@ struct tee_ioctl_invoke_arg {
  * TEE_IOC_INVOKE - Invokes a function in a Trusted Application
  *
  * Takes a struct tee_ioctl_buf_data which contains a struct
- * tee_invoke_func_arg followed by any array of struct tee_param
+ * tee_ioctl_invoke_arg followed by any array of struct tee_ioctl_param
  */
 #define TEE_IOC_INVOKE		_IOR(TEE_IOC_MAGIC, TEE_IOC_BASE + 3, \
 				     struct tee_ioctl_buf_data)
@@ -337,7 +337,7 @@ struct tee_iocl_supp_recv_arg {
  * TEE_IOC_SUPPL_RECV - Receive a request for a supplicant function
  *
  * Takes a struct tee_ioctl_buf_data which contains a struct
- * tee_iocl_supp_recv_arg followed by any array of struct tee_param
+ * tee_iocl_supp_recv_arg followed by any array of struct tee_ioctl_param
  */
 #define TEE_IOC_SUPPL_RECV	_IOR(TEE_IOC_MAGIC, TEE_IOC_BASE + 6, \
 				     struct tee_ioctl_buf_data)
@@ -358,7 +358,7 @@ struct tee_iocl_supp_send_arg {
  * TEE_IOC_SUPPL_SEND - Send a response to a received request
  *
  * Takes a struct tee_ioctl_buf_data which contains a struct
- * tee_iocl_supp_send_arg followed by any array of struct tee_param
+ * tee_iocl_supp_send_arg followed by any array of struct tee_ioctl_param
  */
 #define TEE_IOC_SUPPL_SEND	_IOR(TEE_IOC_MAGIC, TEE_IOC_BASE + 7, \
 				     struct tee_ioctl_buf_data)
