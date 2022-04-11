@@ -257,8 +257,11 @@ int dw_pcie_allocate_domains(struct pcie_port *pp)
 
 static void dw_pcie_free_msi(struct pcie_port *pp)
 {
-	if (pp->msi_irq)
-		irq_set_chained_handler_and_data(pp->msi_irq, NULL, NULL);
+	u32 ctrl;
+
+	for (ctrl = 0; ctrl < MAX_MSI_CTRLS; ctrl++)
+		if (pp->msi_irq[ctrl])
+			irq_set_chained_handler_and_data(pp->msi_irq[ctrl], NULL, NULL);
 
 	irq_domain_remove(pp->msi_domain);
 	irq_domain_remove(pp->irq_domain);
@@ -368,12 +371,37 @@ int dw_pcie_host_init(struct pcie_port *pp)
 			for (ctrl = 0; ctrl < num_ctrls; ctrl++)
 				pp->irq_mask[ctrl] = ~0;
 
-			if (!pp->msi_irq) {
-				pp->msi_irq = platform_get_irq_byname_optional(pdev, "msi");
-				if (pp->msi_irq < 0) {
-					pp->msi_irq = platform_get_irq(pdev, 0);
-					if (pp->msi_irq < 0)
-						return pp->msi_irq;
+			if (!pp->msi_irq[0]) {
+				int irq = platform_get_irq_byname_optional(pdev, "msi");
+
+				if (irq < 0) {
+					irq = platform_get_irq(pdev, 0);
+					if (irq < 0)
+						return irq;
+				}
+				pp->msi_irq[0] = irq;
+			}
+
+			if (pp->has_split_msi_irq) {
+				char irq_name[] = "msiXXX";
+				int irq;
+
+				for (ctrl = 1; ctrl < num_ctrls; ctrl++) {
+					if (pp->msi_irq[ctrl])
+						continue;
+
+					snprintf(irq_name, sizeof(irq_name), "msi%d", ctrl + 1);
+					irq = platform_get_irq_byname_optional(pdev, irq_name);
+					if (irq == -ENXIO) {
+						num_ctrls = ctrl;
+						pp->num_vectors = num_ctrls * MAX_MSI_IRQS_PER_CTRL;
+						dev_warn(dev, "Limiting amount of MSI irqs to %d\n", pp->num_vectors);
+						break;
+					}
+					if (irq < 0)
+						return irq;
+
+					pp->msi_irq[ctrl] = irq;
 				}
 			}
 
@@ -383,10 +411,12 @@ int dw_pcie_host_init(struct pcie_port *pp)
 			if (ret)
 				return ret;
 
-			if (pp->msi_irq > 0)
-				irq_set_chained_handler_and_data(pp->msi_irq,
-							    dw_chained_msi_isr,
-							    pp);
+			for (ctrl = 0; ctrl < num_ctrls; ctrl++) {
+				if (pp->msi_irq[ctrl] > 0)
+					irq_set_chained_handler_and_data(pp->msi_irq[ctrl],
+									 dw_chained_msi_isr,
+									 pp);
+			}
 
 			ret = dma_set_mask(pci->dev, DMA_BIT_MASK(32));
 			if (ret)
