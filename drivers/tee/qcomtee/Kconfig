@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Qualcomm Trusted Execution Environment Configuration
+config QCOMTEE
+	tristate "Qualcomm TEE"
+	default m
+	help
+	  This implements Qualcomm's Trusted Execution Environment (TEE) driver.
