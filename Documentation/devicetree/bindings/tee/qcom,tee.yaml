@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/soc/qcom/qcom,tee.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: Qualcomm Trusted Execution Environment (TEE) binding
+
+maintainers:
+  - Srinivas Kandagatla <srinivas.kandagatla@linaro.org>
+
+description:
+  This binding describes the Qualcomm Trusted Execution Environment(QTEE),
+  that is used for communication between REE (Rich Operating System
+  Execution Environment) and QTEE applications in Trust Zone.
+
+properties:
+  compatible:
+    const: qcom,tee
+
+required:
+  - compatible
+
+additionalProperties: false
+
+examples:
+  - |
+
+    tee {
+        compatible = "qcom,tee";
+    };
+
+...
