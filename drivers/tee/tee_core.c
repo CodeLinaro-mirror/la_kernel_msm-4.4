@@ -647,6 +647,7 @@ static int params_to_supp(struct tee_context *ctx,
 		switch (p->attr & TEE_IOCTL_PARAM_ATTR_TYPE_MASK) {
 		case TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT:
 		case TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INOUT:
+		case TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_OUTPUT:
 			ip.a = p->u.value.a;
 			ip.b = p->u.value.b;
 			ip.c = p->u.value.c;
