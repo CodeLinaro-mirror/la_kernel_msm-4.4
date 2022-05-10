@@ -63,6 +63,15 @@ struct tee_param_memref {
 	struct tee_shm *shm;
 };
 
+struct tee_param_objref {
+	u64 fd; /* Object FD for ONLY input objects ex: Callback Server FD
+		   for input objects */
+	u64 id; /* Object ID for Input /Output Objects from REE and TEE
+		   respectively. This is only 32 bit for both remote and
+		 local objects*/
+	u64 reserved;
+};
+
 struct tee_param_value {
 	u64 a;
 	u64 b;
@@ -74,6 +83,7 @@ struct tee_param {
 	union {
 		struct tee_param_memref memref;
 		struct tee_param_value value;
+		struct tee_param_objref obj;
 	} u;
 };
 

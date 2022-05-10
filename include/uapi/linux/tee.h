@@ -154,6 +154,10 @@ struct tee_ioctl_buf_data {
 #define TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_OUTPUT	6
 #define TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT	7	/* input and output */
 
+/* These define objects references that are send by TA to REE and vice-versa */
+#define TEE_IOCTL_PARAM_ATTR_TYPE_OBJECT_INPUT	8 /* Object input */
+#define TEE_IOCTL_PARAM_ATTR_TYPE_OBJECT_OUTPUT	9 /* Object output */
+#define TEE_IOCTL_PARAM_ATTR_TYPE_OBJECT_INOUT	10 /* Object output and output */
 /*
  * Mask for the type part of the attribute, leaves room for more types
  */

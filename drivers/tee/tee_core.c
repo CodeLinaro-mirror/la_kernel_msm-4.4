@@ -375,6 +375,7 @@ static int params_from_user(struct tee_context *ctx, struct tee_param *params,
 		params[n].attr = ip.attr;
 		switch (ip.attr & TEE_IOCTL_PARAM_ATTR_TYPE_MASK) {
 		case TEE_IOCTL_PARAM_ATTR_TYPE_NONE:
+		case TEE_IOCTL_PARAM_ATTR_TYPE_OBJECT_OUTPUT:
 			break;
 		case TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT:
 		case TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INOUT:
@@ -382,6 +383,11 @@ static int params_from_user(struct tee_context *ctx, struct tee_param *params,
 			params[n].u.value.a = ip.a;
 			params[n].u.value.b = ip.b;
 			params[n].u.value.c = ip.c;
+			break;
+		case TEE_IOCTL_PARAM_ATTR_TYPE_OBJECT_INPUT:
+		case TEE_IOCTL_PARAM_ATTR_TYPE_OBJECT_INOUT:
+			params[n].u.obj.fd = ip.a;
+			params[n].u.obj.id = ip.b;
 			break;
 		case TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INPUT:
 		case TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_OUTPUT:
@@ -454,6 +460,12 @@ static int params_to_user(struct tee_ioctl_param __user *uparams,
 		case TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_OUTPUT:
 		case TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT:
 			if (put_user((u64)p->u.memref.size, &up->b))
+				return -EFAULT;
+			break;
+		case TEE_IOCTL_PARAM_ATTR_TYPE_OBJECT_INOUT:
+		case TEE_IOCTL_PARAM_ATTR_TYPE_OBJECT_OUTPUT:
+			if (put_user(p->u.obj.fd, &up->a) ||
+			    put_user(p->u.obj.id, &up->b))
 				return -EFAULT;
 			break;
 		default:
