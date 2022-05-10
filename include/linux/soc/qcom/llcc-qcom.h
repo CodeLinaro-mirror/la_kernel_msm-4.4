@@ -57,9 +57,6 @@ struct llcc_slice_desc {
 /**
  * struct llcc_edac_reg_data - llcc edac registers data for each error type
  * @name: Name of the error
- * @synd_reg: Syndrome register address
- * @count_status_reg: Status register address to read the error count
- * @ways_status_reg: Status register address to read the error ways
  * @reg_cnt: Number of registers
  * @count_mask: Mask value to get the error count
  * @ways_mask: Mask value to get the error ways
@@ -68,14 +65,39 @@ struct llcc_slice_desc {
  */
 struct llcc_edac_reg_data {
 	char *name;
-	u64 synd_reg;
-	u64 count_status_reg;
-	u64 ways_status_reg;
 	u32 reg_cnt;
 	u32 count_mask;
 	u32 ways_mask;
 	u8  count_shift;
 	u8  ways_shift;
+};
+
+struct llcc_edac_reg {
+	/* LLCC TRP registers */
+	u32 trp_ecc_error_status0;
+	u32 trp_ecc_error_status1;
+	u32 trp_ecc_sb_err_syn0;
+	u32 trp_ecc_db_err_syn0;
+	u32 trp_ecc_error_cntr_clear;
+	u32 trp_interrupt_0_status;
+	u32 trp_interrupt_0_clear;
+	u32 trp_interrupt_0_enable;
+
+	/* LLCC Common registers */
+	u32 cmn_status0;
+	u32 cmn_interrupt_0_enable;
+	u32 cmn_interrupt_2_enable;
+
+	/* LLCC DRP registers */
+	u32 drp_ecc_error_cfg;
+	u32 drp_ecc_error_cntr_clear;
+	u32 drp_interrupt_status;
+	u32 drp_interrupt_clear;
+	u32 drp_interrupt_enable;
+	u32 drp_ecc_error_status0;
+	u32 drp_ecc_error_status1;
+	u32 drp_ecc_sb_err_syn0;
+	u32 drp_ecc_db_err_syn0;
 };
 
 /**
@@ -96,6 +118,7 @@ struct llcc_drv_data {
 	struct regmap *regmap;
 	struct regmap *bcast_regmap;
 	const struct llcc_slice_config *cfg;
+	const struct llcc_edac_reg *edac_reg;
 	struct mutex lock;
 	u32 cfg_size;
 	u32 max_slices;
