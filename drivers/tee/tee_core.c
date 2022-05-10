@@ -375,10 +375,10 @@ static int params_from_user(struct tee_context *ctx, struct tee_param *params,
 		params[n].attr = ip.attr;
 		switch (ip.attr & TEE_IOCTL_PARAM_ATTR_TYPE_MASK) {
 		case TEE_IOCTL_PARAM_ATTR_TYPE_NONE:
-		case TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_OUTPUT:
 			break;
 		case TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT:
 		case TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INOUT:
+		case TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_OUTPUT:
 			params[n].u.value.a = ip.a;
 			params[n].u.value.b = ip.b;
 			params[n].u.value.c = ip.c;
