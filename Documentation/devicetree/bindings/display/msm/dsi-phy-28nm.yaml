@@ -40,6 +40,9 @@ properties:
       - description: dsi phy register set
       - description: dsi phy regulator register set
 
+  qcom,dsi-phy-regulator-ldo-mode:
+    description: Boolean value indicating if the LDO mode PHY regulator is wanted.
+
   reg-names:
     items:
       - const: dsi_pll
