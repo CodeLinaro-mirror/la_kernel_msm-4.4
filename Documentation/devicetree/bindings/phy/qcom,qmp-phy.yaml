@@ -102,6 +102,10 @@ properties:
     description:
       Phandle to a regulator supply to any specific refclk pll block.
 
+  power-domains:
+    description: Phandle to the power domain node.
+    maxItems: 1
+
 #Required nodes:
 patternProperties:
   "^phy@[0-9a-f]+$":
