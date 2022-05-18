@@ -496,3 +496,4 @@ static void __exit qtee_shmbridge_driver_exit(void)
 {
 	platform_driver_unregister(&qtee_shmbridge_driver);
 }*/
+MODULE_LICENSE("GPL");
