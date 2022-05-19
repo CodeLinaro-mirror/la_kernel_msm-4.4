@@ -1990,6 +1990,9 @@ static int smcinvoke_probe(struct platform_device *pdev)
 	int rc = 0;
 	bool support_hyp;
 
+	if (!qcom_scm_is_available())
+		return -EPROBE_DEFER;
+
 	rc = alloc_chrdev_region(&smcinvoke_device_no, baseminor, count,
 							SMCINVOKE_DEV);
 	if (rc < 0) {
