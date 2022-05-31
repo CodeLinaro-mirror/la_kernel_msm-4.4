@@ -26,7 +26,6 @@
 #include <asm/cacheflush.h>
 //#include <soc/qcom/qseecomi.h>
 
-#include "qtee_shmbridge.h"
 #include "smcinvoke_object.h"
 
 #define SMCINVOKE_DEV                   "smcinvoke"
@@ -370,8 +369,8 @@ static inline void free_mem_obj_locked(struct smcinvoke_mem_obj *mem_obj)
 {
 	list_del(&mem_obj->list);
 	dma_buf_put(mem_obj->dma_buf);
-	if (!mem_obj->bridge_created_by_others)
-		qtee_shmbridge_deregister(mem_obj->shmbridge_handle);
+//	if (!mem_obj->bridge_created_by_others)
+//		qtee_shmbridge_deregister(mem_obj->shmbridge_handle);
 	kfree(mem_obj);
 }
 
@@ -1155,8 +1154,7 @@ static int prepare_send_scm_msg(const uint8_t *in_buf, phys_addr_t in_paddr,
 				size_t out_buf_len,
 				struct smcinvoke_cmd_req *req,
 				union smcinvoke_arg *args_buf,
-				bool *tz_acked,
-				struct qtee_shm *in_shm,struct  qtee_shm *out_shm)
+				bool *tz_acked)
 {
 	int ret = 0, cmd;
 	u64 response_type;
@@ -1189,19 +1187,14 @@ static int prepare_send_scm_msg(const uint8_t *in_buf, phys_addr_t in_paddr,
 					out_paddr, out_buf_len,
 					&req->result, &response_type, &data);
 		else*/
-		qtee_shmbridge_flush_shm_buf(in_shm);
-		qtee_shmbridge_flush_shm_buf(out_shm);
 		 if (cmd == SMCINVOKE_INVOKE_CMD)
 			ret = qcom_scm_invoke_smc(in_paddr, in_buf_len,
 					out_paddr, out_buf_len,
 					&req->result, &response_type, &data);
 		else
 			ret = qcom_scm_invoke_callback_response(
-					virt_to_phys(out_buf), out_buf_len,
+					out_paddr, out_buf_len,
 					&req->result, &response_type, &data);
-
-		qtee_shmbridge_inv_shm_buf(in_shm);
-		qtee_shmbridge_inv_shm_buf(out_shm);
 
 		if (!ret && !is_inbound_req(response_type)) {
 			/* dont marshal if Obj returns an error */
@@ -1742,10 +1735,11 @@ static long process_invoke_req(struct file *filp, unsigned int cmd,
 	int    ret = -1, nr_args = 0;
 	struct smcinvoke_cmd_req req = {0};
 	void   *in_msg = NULL, *out_msg = NULL;
+	phys_addr_t in_paddr, out_paddr;
 	size_t inmsg_size = 0, outmsg_size = SMCINVOKE_TZ_MIN_BUF_SIZE;
 	union  smcinvoke_arg *args_buf = NULL;
 	struct smcinvoke_file_data *tzobj = filp->private_data;
-	struct qtee_shm in_shm = {0}, out_shm = {0};
+	struct device *dev = &smcinvoke_pdev->dev;
 
 	/*
 	 * Hold reference to remote object until invoke op is not
@@ -1798,24 +1792,24 @@ static long process_invoke_req(struct file *filp, unsigned int cmd,
 	}
 
 	inmsg_size = compute_in_msg_size(&req, args_buf);
-	ret = qtee_shmbridge_allocate_shm(inmsg_size, &in_shm);
-	if (ret) {
+
+	in_msg = dma_alloc_coherent(dev, inmsg_size, &in_paddr, GFP_KERNEL);
+
+	if (!in_msg) {
 		ret = -ENOMEM;
 		pr_err("shmbridge alloc failed for in msg in invoke req\n");
 		goto out;
 	}
-	in_msg = in_shm.vaddr;
 
 	mutex_lock(&g_smcinvoke_lock);
 	outmsg_size = PAGE_ALIGN(g_max_cb_buf_size);
 	mutex_unlock(&g_smcinvoke_lock);
-	ret = qtee_shmbridge_allocate_shm(outmsg_size, &out_shm);
-	if (ret) {
+	out_msg = dma_alloc_coherent(dev, outmsg_size, &out_paddr, GFP_KERNEL);
+	if (!out_msg) {
 		ret = -ENOMEM;
 		pr_err("shmbridge alloc failed for out msg in invoke req\n");
 		goto out;
 	}
-	out_msg = out_shm.vaddr;
 
 	ret = marshal_in_invoke_req(&req, args_buf, tzobj->tzhandle, in_msg,
 			inmsg_size, filp_to_release, tzhandles_to_release);
@@ -1824,10 +1818,9 @@ static long process_invoke_req(struct file *filp, unsigned int cmd,
 		goto out;
 	}
 	//pr_err("in_msg-> tzhandle:%d",(struct smcinvoke_msg_hdr)in_msg->tzhandle);
-	
-	ret = prepare_send_scm_msg(in_msg, in_shm.paddr, inmsg_size,
-					out_msg, out_shm.paddr, outmsg_size,
-					&req, args_buf, &tz_acked, &in_shm, &out_shm);
+	ret = prepare_send_scm_msg(in_msg, in_paddr, inmsg_size,
+					out_msg, out_paddr, outmsg_size,
+					&req, args_buf, &tz_acked);
 
 	/*
 	 * If scm_call is success, TZ owns responsibility to release
@@ -1864,8 +1857,9 @@ out:
 	release_filp(filp_to_release, OBJECT_COUNTS_MAX_OO);
 	if (ret)
 		release_tzhandles(tzhandles_to_release, OBJECT_COUNTS_MAX_OO);
-	qtee_shmbridge_free_shm(&in_shm);
-	qtee_shmbridge_free_shm(&out_shm);
+
+	dma_free_coherent(dev, inmsg_size, in_msg, in_paddr);
+	dma_free_coherent(dev, outmsg_size, out_msg, out_paddr);
 	kfree(args_buf);
 
 	if (ret)
@@ -1932,11 +1926,12 @@ static int smcinvoke_release(struct inode *nodp, struct file *filp)
 	bool release_handles;
 	uint8_t *in_buf = NULL;
 	uint8_t *out_buf = NULL;
+	phys_addr_t in_paddr, out_paddr;
 	struct smcinvoke_msg_hdr hdr = {0};
 	struct smcinvoke_file_data *file_data = filp->private_data;
 	struct smcinvoke_cmd_req req = {0};
 	uint32_t tzhandle = 0;
-	struct qtee_shm in_shm = {0}, out_shm = {0};
+	struct device *dev = &smcinvoke_pdev->dev;
 
 	if (file_data->context_type == SMCINVOKE_OBJ_TYPE_SERVER) {
 		ret = release_cb_server(file_data->server_id);
@@ -1948,37 +1943,34 @@ static int smcinvoke_release(struct inode *nodp, struct file *filp)
 	if (!tzhandle || tzhandle == SMCINVOKE_TZ_ROOT_OBJ)
 		goto out;
 
-	ret = qtee_shmbridge_allocate_shm(SMCINVOKE_TZ_MIN_BUF_SIZE, &in_shm);
-	if (ret) {
+	in_buf = dma_alloc_coherent(dev, SMCINVOKE_TZ_MIN_BUF_SIZE, &in_paddr, GFP_KERNEL);
+	if (!in_buf) {
 		ret = -ENOMEM;
 		pr_err("shmbridge alloc failed for in msg in release\n");
 		goto out;
 	}
 
-	ret = qtee_shmbridge_allocate_shm(SMCINVOKE_TZ_MIN_BUF_SIZE, &out_shm);
-	if (ret) {
+	out_buf = dma_alloc_coherent(dev, SMCINVOKE_TZ_MIN_BUF_SIZE, &out_paddr, GFP_KERNEL);
+	if (!out_buf) {
 		ret = -ENOMEM;
 		pr_err("shmbridge alloc failed for out msg in release\n");
 		goto out;
 	}
 
-	in_buf = in_shm.vaddr;
-	out_buf = out_shm.vaddr;
 	hdr.tzhandle = tzhandle;
 	hdr.op = OBJECT_OP_RELEASE;
 	hdr.counts = 0;
 	*(struct smcinvoke_msg_hdr *)in_buf = hdr;
 
-	ret = prepare_send_scm_msg(in_buf, in_shm.paddr,
-		SMCINVOKE_TZ_MIN_BUF_SIZE, out_buf, out_shm.paddr,
-		SMCINVOKE_TZ_MIN_BUF_SIZE, &req, NULL, &release_handles,
-		&in_shm, &out_shm);
+	ret = prepare_send_scm_msg(in_buf, in_paddr,
+		SMCINVOKE_TZ_MIN_BUF_SIZE, out_buf, out_paddr,
+		SMCINVOKE_TZ_MIN_BUF_SIZE, &req, NULL, &release_handles);
 
 	process_piggyback_data(out_buf, SMCINVOKE_TZ_MIN_BUF_SIZE);
 out:
 	kfree(filp->private_data);
-	qtee_shmbridge_free_shm(&in_shm);
-	qtee_shmbridge_free_shm(&out_shm);
+	dma_free_coherent(dev, SMCINVOKE_TZ_MIN_BUF_SIZE, in_buf, in_paddr);
+	dma_free_coherent(dev, SMCINVOKE_TZ_MIN_BUF_SIZE, out_buf, out_paddr);
 
 	return ret;
 }
@@ -1988,7 +1980,6 @@ static int smcinvoke_probe(struct platform_device *pdev)
 	unsigned int baseminor = 0;
 	unsigned int count = 1;
 	int rc = 0;
-	bool support_hyp;
 
 	if (!qcom_scm_is_available())
 		return -EPROBE_DEFER;
@@ -2031,12 +2022,6 @@ static int smcinvoke_probe(struct platform_device *pdev)
 	legacy_smc_call = of_property_read_bool((&pdev->dev)->of_node,
 			"qcom,support-legacy_smc");
 
-	support_hyp = of_property_read_bool((&pdev->dev)->of_node, "qcom,support-hypervisor");
-	rc = qtee_shmbridge_init(&pdev->dev, support_hyp);
-	if (rc) {
-		dev_err(&pdev->dev, "Error creating shared memory bridge \n");
-		goto exit_destroy_device;
-	}
 	return  0;
 
 exit_destroy_device:
@@ -2052,7 +2037,6 @@ static int smcinvoke_remove(struct platform_device *pdev)
 {
 	int count = 1;
 
-	qtee_shmbridge_deinit(&pdev->dev);
 	cdev_del(&smcinvoke_cdev);
 	device_destroy(driver_class, smcinvoke_device_no);
 	class_destroy(driver_class);
