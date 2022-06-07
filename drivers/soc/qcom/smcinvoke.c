@@ -865,7 +865,7 @@ static int32_t smcinvoke_map_mem_region(void *buf, size_t buf_len)
 
 		sgt = dma_buf_map_attachment(buf_attach, DMA_BIDIRECTIONAL);
 		if (IS_ERR(sgt)) {
-			pr_err("mapping dma buffers failed, ret: %d\n",
+			pr_err("mapping dma buffers failed, ret: %ld\n",
 					PTR_ERR(sgt));
 			ret = OBJECT_ERROR_KMEM;
 			goto out;
@@ -948,7 +948,7 @@ static void process_tzcb_req(void *buf, size_t buf_len, struct file **arr_filp)
 	struct smcinvoke_server_info *srvr_info = NULL;
 
 	if (buf_len < sizeof(struct smcinvoke_tzcb_req)) {
-		pr_err("smaller buffer length : %u\n", buf_len);
+		pr_err("smaller buffer length : %ld\n", buf_len);
 		return;
 	}
 
