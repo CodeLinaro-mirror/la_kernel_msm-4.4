@@ -63,6 +63,12 @@ properties:
       - const: aux
       - const: ref
 
+  clock-output-names:
+    items:
+      - const: a53mux_c0
+      - const: a53mux_c1
+      - const: a53mux_cci
+
 required:
   - compatible
   - reg
