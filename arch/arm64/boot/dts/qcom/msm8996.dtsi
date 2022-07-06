@@ -933,6 +933,8 @@
 					      "core_mmss",
 					      "pixel",
 					      "core";
+				assigned-clocks = <&mmcc BYTE0_CLK_SRC>, <&mmcc PCLK0_CLK_SRC>;
+				assigned-clock-parents = <&dsi0_phy 0>, <&dsi0_phy 1>;
 
 				phys = <&dsi0_phy>;
 				phy-names = "dsi";
