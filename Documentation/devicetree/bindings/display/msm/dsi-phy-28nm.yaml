@@ -19,11 +19,29 @@ properties:
       - qcom,dsi-phy-28nm-lp
       - qcom,dsi-phy-28nm-8960
 
+  clocks:
+    minItems: 1
+    maxItems: 2
+
+  clock-names:
+    items:
+      - const: iface
+        description: AHB clock
+      - const: iface_clk
+        description: AHB clock
+      - const: ref
+        description: Block reference clock
+    minItems: 1
+    maxItems: 2
+
   reg:
     items:
       - description: dsi pll register set
       - description: dsi phy register set
       - description: dsi phy regulator register set
+
+  qcom,dsi-phy-regulator-ldo-mode:
+    description: Boolean value indicating if the LDO mode PHY regulator is wanted.
 
   reg-names:
     items:
@@ -36,6 +54,8 @@ properties:
 
 required:
   - compatible
+  - clocks
+  - clock-names
   - reg
   - reg-names
   - vddio-supply
