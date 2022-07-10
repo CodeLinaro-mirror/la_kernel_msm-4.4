@@ -268,7 +268,7 @@ static inline void mhi_debugfs_exit(void)
 }
 #endif
 
-struct mhi_device *mhi_alloc_device(struct mhi_controller *mhi_cntrl);
+struct mhi_device *mhi_alloc_device(struct mhi_controller *mhi_cntrl, struct device *parent);
 
 int mhi_destroy_device(struct device *dev, void *data);
 void mhi_create_devices(struct mhi_controller *mhi_cntrl);

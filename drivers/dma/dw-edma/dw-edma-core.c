@@ -16,6 +16,7 @@
 #include <linux/irq.h>
 #include <linux/dma/edma.h>
 #include <linux/dma-mapping.h>
+#include <linux/of_dma.h>
 
 #include "dw-edma-core.h"
 #include "dw-edma-v0-core.h"
@@ -333,28 +334,16 @@ dw_edma_device_transfer(struct dw_edma_transfer *xfer)
 	struct dw_edma_chunk *chunk;
 	struct dw_edma_burst *burst;
 	struct dw_edma_desc *desc;
+	bool read = false;
 	u32 cnt = 0;
 	int i;
 
 	if (!chan->configured)
 		return NULL;
 
-	switch (chan->config.direction) {
-	case DMA_DEV_TO_MEM: /* local DMA */
-		if (dir == DMA_DEV_TO_MEM && chan->dir == EDMA_DIR_READ)
-			break;
+	/* eDMA supports only read and write between local and remote memory */
+	if (dir != DMA_DEV_TO_MEM && dir != DMA_MEM_TO_DEV)
 		return NULL;
-	case DMA_MEM_TO_DEV: /* local DMA */
-		if (dir == DMA_MEM_TO_DEV && chan->dir == EDMA_DIR_WRITE)
-			break;
-		return NULL;
-	default: /* remote DMA */
-		if (dir == DMA_MEM_TO_DEV && chan->dir == EDMA_DIR_READ)
-			break;
-		if (dir == DMA_DEV_TO_MEM && chan->dir == EDMA_DIR_WRITE)
-			break;
-		return NULL;
-	}
 
 	if (xfer->type == EDMA_XFER_CYCLIC) {
 		if (!xfer->xfer.cyclic.len || !xfer->xfer.cyclic.cnt)
@@ -423,7 +412,36 @@ dw_edma_device_transfer(struct dw_edma_transfer *xfer)
 		chunk->ll_region.sz += burst->sz;
 		desc->alloc_sz += burst->sz;
 
-		if (chan->dir == EDMA_DIR_WRITE) {
+		/****************************************************************
+		 *
+		 *        Root Complex                           Endpoint
+		 * +-----------------------+             +----------------------+
+		 * |                       |    TX CH    |                      |
+		 * |                       |             |                      |
+		 * |      DEV_TO_MEM       <-------------+     MEM_TO_DEV       |
+		 * |                       |             |                      |
+		 * |                       |             |                      |
+		 * |      MEM_TO_DEV       +------------->     DEV_TO_MEM       |
+		 * |                       |             |                      |
+		 * |                       |    RX CH    |                      |
+		 * +-----------------------+             +----------------------+
+		 *
+		 * If eDMA is controlled by the Root complex, TX channel
+		 * (EDMA_DIR_WRITE) is used for memory read (DEV_TO_MEM) and RX
+		 * channel (EDMA_DIR_READ) is used for memory write (MEM_TO_DEV).
+		 *
+		 * If eDMA is controlled by the endpoint, RX channel
+		 * (EDMA_DIR_READ) is used for memory read (DEV_TO_MEM) and TX
+		 * channel (EDMA_DIR_WRITE) is used for memory write (MEM_TO_DEV).
+		 *
+		 ****************************************************************/
+
+		if ((dir == DMA_DEV_TO_MEM && chan->dir == EDMA_DIR_READ) ||
+		    (dir == DMA_DEV_TO_MEM && chan->dir == EDMA_DIR_WRITE))
+			read = true;
+
+		/* Program the source and destination addresses for DMA read/write */
+		if (read) {
 			burst->sar = src_addr;
 			if (xfer->type == EDMA_XFER_CYCLIC) {
 				burst->dar = xfer->xfer.cyclic.paddr;
@@ -534,6 +552,15 @@ dw_edma_device_prep_interleaved_dma(struct dma_chan *dchan,
 	xfer.type = EDMA_XFER_INTERLEAVED;
 
 	return dw_edma_device_transfer(&xfer);
+}
+
+/* Override the generic DMA slave channel direction with per-channel specific one */
+static void dw_edma_device_caps(struct dma_chan *dchan, struct dma_slave_caps *caps)
+{
+	struct dw_edma_chan *chan = dchan2dw_edma_chan(dchan);
+
+	caps->directions = (chan->dir == EDMA_DIR_WRITE) ? BIT(DMA_MEM_TO_DEV) :
+			    BIT(DMA_DEV_TO_MEM);
 }
 
 static void dw_edma_done_interrupt(struct dw_edma_chan *chan)
@@ -663,7 +690,7 @@ static int dw_edma_alloc_chan_resources(struct dma_chan *dchan)
 	if (chan->status != EDMA_ST_IDLE)
 		return -EBUSY;
 
-	pm_runtime_get(chan->chip->dev);
+	//pm_runtime_get(chan->chip->dev);
 
 	return 0;
 }
@@ -671,7 +698,7 @@ static int dw_edma_alloc_chan_resources(struct dma_chan *dchan)
 static void dw_edma_free_chan_resources(struct dma_chan *dchan)
 {
 	unsigned long timeout = jiffies + msecs_to_jiffies(5000);
-	struct dw_edma_chan *chan = dchan2dw_edma_chan(dchan);
+	//struct dw_edma_chan *chan = dchan2dw_edma_chan(dchan);
 	int ret;
 
 	while (time_before(jiffies, timeout)) {
@@ -685,13 +712,12 @@ static void dw_edma_free_chan_resources(struct dma_chan *dchan)
 		cpu_relax();
 	}
 
-	pm_runtime_put(chan->chip->dev);
+	//pm_runtime_put(chan->chip->dev);
 }
 
 static int dw_edma_channel_setup(struct dw_edma_chip *chip, bool write,
 				 u32 wr_alloc, u32 rd_alloc)
 {
-	struct dw_edma_region *dt_region;
 	struct device *dev = chip->dev;
 	struct dw_edma *dw = chip->dw;
 	struct dw_edma_chan *chan;
@@ -699,32 +725,25 @@ static int dw_edma_channel_setup(struct dw_edma_chip *chip, bool write,
 	struct dma_device *dma;
 	u32 alloc, off_alloc;
 	u32 i, j, cnt;
-	int err = 0;
 	u32 pos;
 
 	if (write) {
 		i = 0;
 		cnt = dw->wr_ch_cnt;
-		dma = &dw->wr_edma;
 		alloc = wr_alloc;
 		off_alloc = 0;
 	} else {
 		i = dw->wr_ch_cnt;
 		cnt = dw->rd_ch_cnt;
-		dma = &dw->rd_edma;
 		alloc = rd_alloc;
 		off_alloc = wr_alloc;
 	}
 
-	INIT_LIST_HEAD(&dma->channels);
+	dma = &dw->edma;
+
 	for (j = 0; (alloc || dw->nr_irqs == 1) && j < cnt; j++, i++) {
 		chan = &dw->chan[i];
 
-		dt_region = devm_kzalloc(dev, sizeof(*dt_region), GFP_KERNEL);
-		if (!dt_region)
-			return -ENOMEM;
-
-		chan->vc.chan.private = dt_region;
 
 		chan->chip = chip;
 		chan->id = j;
@@ -765,18 +784,17 @@ static int dw_edma_channel_setup(struct dw_edma_chip *chip, bool write,
 		chan->vc.desc_free = vchan_free_desc;
 		vchan_init(&chan->vc, dma);
 
-		if (write) {
-			dt_region->paddr = dw->dt_region_wr[j].paddr;
-			dt_region->vaddr = dw->dt_region_wr[j].vaddr;
-			dt_region->sz = dw->dt_region_wr[j].sz;
-		} else {
-			dt_region->paddr = dw->dt_region_rd[j].paddr;
-			dt_region->vaddr = dw->dt_region_rd[j].vaddr;
-			dt_region->sz = dw->dt_region_rd[j].sz;
-		}
-
 		dw_edma_v0_core_device_config(chan);
 	}
+
+	return 0;
+}
+
+static int dw_edma_setup(struct dw_edma_chip *chip)
+{
+	struct dw_edma *dw = chip->dw;
+	struct dma_device *dma = &dw->edma;
+	int err;
 
 	/* Set DMA channel capabilities */
 	dma_cap_zero(dma->cap_mask);
@@ -784,11 +802,10 @@ static int dw_edma_channel_setup(struct dw_edma_chip *chip, bool write,
 	dma_cap_set(DMA_CYCLIC, dma->cap_mask);
 	dma_cap_set(DMA_PRIVATE, dma->cap_mask);
 	dma_cap_set(DMA_INTERLEAVE, dma->cap_mask);
-	dma->directions = BIT(write ? DMA_DEV_TO_MEM : DMA_MEM_TO_DEV);
+	dma->directions = BIT(DMA_DEV_TO_MEM) | BIT(DMA_MEM_TO_DEV);
 	dma->src_addr_widths = BIT(DMA_SLAVE_BUSWIDTH_4_BYTES);
 	dma->dst_addr_widths = BIT(DMA_SLAVE_BUSWIDTH_4_BYTES);
 	dma->residue_granularity = DMA_RESIDUE_GRANULARITY_DESCRIPTOR;
-	dma->chancnt = cnt;
 
 	/* Set DMA channel callbacks */
 	dma->dev = chip->dev;
@@ -803,11 +820,25 @@ static int dw_edma_channel_setup(struct dw_edma_chip *chip, bool write,
 	dma->device_prep_slave_sg = dw_edma_device_prep_slave_sg;
 	dma->device_prep_dma_cyclic = dw_edma_device_prep_dma_cyclic;
 	dma->device_prep_interleaved_dma = dw_edma_device_prep_interleaved_dma;
+	dma->device_caps = dw_edma_device_caps;
 
 	dma_set_max_seg_size(dma->dev, U32_MAX);
 
 	/* Register DMA device */
 	err = dma_async_device_register(dma);
+	if (err)
+		return err;
+
+	err = of_dma_controller_register(chip->dev->of_node,
+					 of_dma_xlate_by_chan_id,
+					 dma);
+	if (err)
+		goto err_unregister;
+
+	return 0;
+
+err_unregister:
+	dma_async_device_unregister(dma);
 
 	return err;
 }
@@ -940,6 +971,8 @@ int dw_edma_probe(struct dw_edma_chip *chip)
 	if (err)
 		return err;
 
+	INIT_LIST_HEAD(&dw->edma.channels);
+
 	/* Setup write channels */
 	err = dw_edma_channel_setup(chip, true, wr_alloc, rd_alloc);
 	if (err)
@@ -950,8 +983,12 @@ int dw_edma_probe(struct dw_edma_chip *chip)
 	if (err)
 		goto err_irq_free;
 
+	err = dw_edma_setup(chip);
+	if (err)
+		goto err_irq_free;
+
 	/* Power management */
-	pm_runtime_enable(dev);
+	//pm_runtime_enable(dev);
 
 	/* Turn debugfs on */
 	dw_edma_v0_core_debugfs_on(chip);
@@ -983,18 +1020,12 @@ int dw_edma_remove(struct dw_edma_chip *chip)
 		free_irq(dw->ops->irq_vector(dev, i), &dw->irq[i]);
 
 	/* Power management */
-	pm_runtime_disable(dev);
+	//pm_runtime_disable(dev);
 
 	/* Deregister eDMA device */
-	dma_async_device_unregister(&dw->wr_edma);
-	list_for_each_entry_safe(chan, _chan, &dw->wr_edma.channels,
-				 vc.chan.device_node) {
-		tasklet_kill(&chan->vc.task);
-		list_del(&chan->vc.chan.device_node);
-	}
-
-	dma_async_device_unregister(&dw->rd_edma);
-	list_for_each_entry_safe(chan, _chan, &dw->rd_edma.channels,
+	of_dma_controller_free(dev->of_node);
+	dma_async_device_unregister(&dw->edma);
+	list_for_each_entry_safe(chan, _chan, &dw->edma.channels,
 				 vc.chan.device_node) {
 		tasklet_kill(&chan->vc.task);
 		list_del(&chan->vc.chan.device_node);

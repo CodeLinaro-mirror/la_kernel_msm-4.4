@@ -8,3 +8,11 @@ config MHI_BUS_EP
 
 	  MHI_BUS_EP implements the MHI protocol for the endpoint devices,
 	  such as SDX55 modem connected to the host machine over PCIe.
+
+config MHI_EP_USE_DMA
+	bool "Use DMA for buffer transfers"
+	depends on MHI_BUS_EP
+	default n
+	help
+	  Use DMA channels to transfer data between RC and EP sides. By default
+	  the driver uses PCIe mapping and memcpy_fromio/memcpy_toio instead.

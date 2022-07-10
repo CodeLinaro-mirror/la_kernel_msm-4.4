@@ -14,7 +14,7 @@
 
 #define MHI_NET_MIN_MTU		ETH_MIN_MTU
 #define MHI_NET_MAX_MTU		0xffff
-#define MHI_NET_DEFAULT_MTU	0x4000
+#define MHI_NET_DEFAULT_MTU	0x8000
 
 struct mhi_net_stats {
 	u64_stats_t rx_packets;
@@ -33,7 +33,8 @@ struct mhi_net_dev {
 	struct net_device *ndev;
 	struct sk_buff *skbagg_head;
 	struct sk_buff *skbagg_tail;
-	struct delayed_work rx_refill;
+	struct workqueue_struct	*refill_wq;
+	struct work_struct refill_work;
 	struct mhi_net_stats stats;
 	u32 rx_queue_sz;
 	int msg_enable;
@@ -49,7 +50,7 @@ static int mhi_ndo_open(struct net_device *ndev)
 	struct mhi_net_dev *mhi_netdev = netdev_priv(ndev);
 
 	/* Feed the rx buffer pool */
-	schedule_delayed_work(&mhi_netdev->rx_refill, 0);
+	queue_work(mhi_netdev->refill_wq, &mhi_netdev->refill_work);
 
 	/* Carrier is established via out-of-band channel (e.g. qmi) */
 	netif_carrier_on(ndev);
@@ -65,7 +66,7 @@ static int mhi_ndo_stop(struct net_device *ndev)
 
 	netif_stop_queue(ndev);
 	netif_carrier_off(ndev);
-	cancel_delayed_work_sync(&mhi_netdev->rx_refill);
+	destroy_workqueue(mhi_netdev->refill_wq);
 
 	return 0;
 }
@@ -229,8 +230,8 @@ static void mhi_net_dl_callback(struct mhi_device *mhi_dev,
 	}
 
 	/* Refill if RX buffers queue becomes low */
-	if (free_desc_count >= mhi_netdev->rx_queue_sz / 2)
-		schedule_delayed_work(&mhi_netdev->rx_refill, 0);
+	if (free_desc_count >= mhi_netdev->rx_queue_sz / 3)
+		queue_work(mhi_netdev->refill_wq, &mhi_netdev->refill_work);
 }
 
 static void mhi_net_ul_callback(struct mhi_device *mhi_dev,
@@ -268,7 +269,7 @@ static void mhi_net_ul_callback(struct mhi_device *mhi_dev,
 static void mhi_net_rx_refill_work(struct work_struct *work)
 {
 	struct mhi_net_dev *mhi_netdev = container_of(work, struct mhi_net_dev,
-						      rx_refill.work);
+						      refill_work);
 	struct net_device *ndev = mhi_netdev->ndev;
 	struct mhi_device *mdev = mhi_netdev->mdev;
 	struct sk_buff *skb;
@@ -293,12 +294,12 @@ static void mhi_net_rx_refill_work(struct work_struct *work)
 		/* Do not hog the CPU if rx buffers are consumed faster than
 		 * queued (unlikely).
 		 */
-		cond_resched();
+//		cond_resched();
 	}
 
 	/* If we're still starved of rx buffers, reschedule later */
 	if (mhi_get_free_desc_count(mdev, DMA_FROM_DEVICE) == mhi_netdev->rx_queue_sz)
-		schedule_delayed_work(&mhi_netdev->rx_refill, HZ / 2);
+		queue_work(mhi_netdev->refill_wq, &mhi_netdev->refill_work);
 }
 
 static int mhi_net_newlink(struct mhi_device *mhi_dev, struct net_device *ndev)
@@ -314,7 +315,11 @@ static int mhi_net_newlink(struct mhi_device *mhi_dev, struct net_device *ndev)
 	mhi_netdev->skbagg_head = NULL;
 	mhi_netdev->mru = mhi_dev->mhi_cntrl->mru;
 
-	INIT_DELAYED_WORK(&mhi_netdev->rx_refill, mhi_net_rx_refill_work);
+	mhi_netdev->refill_wq = alloc_ordered_workqueue("mhi_net_refill_wq", WQ_HIGHPRI);
+	if (!mhi_netdev->refill_wq)
+		return -ENOMEM;
+
+	INIT_WORK(&mhi_netdev->refill_work, mhi_net_rx_refill_work);
 	u64_stats_init(&mhi_netdev->stats.rx_syncp);
 	u64_stats_init(&mhi_netdev->stats.tx_syncp);
 
@@ -386,7 +391,7 @@ static const struct mhi_device_info mhi_swip0 = {
 
 static const struct mhi_device_id mhi_net_id_table[] = {
 	/* Hardware accelerated data PATH (to modem IPA), protocol agnostic */
-	{ .chan = "IP_HW0", .driver_data = (kernel_ulong_t)&mhi_hwip0 },
+//	{ .chan = "IP_HW0", .driver_data = (kernel_ulong_t)&mhi_hwip0 },
 	/* Software data PATH (to modem CPU) */
 	{ .chan = "IP_SW0", .driver_data = (kernel_ulong_t)&mhi_swip0 },
 	{}

@@ -94,6 +94,8 @@ struct mhi_ep_db_info {
  * @index: MHI Endpoint controller index
  * @irq: IRQ used by the endpoint controller
  * @enabled: Check if the endpoint controller is enabled or not
+ * @dma_rx: RX DMA channel
+ * @dma_tx: TX DMA channel
  */
 struct mhi_ep_cntrl {
 	struct device *cntrl_dev;
@@ -148,6 +150,10 @@ struct mhi_ep_cntrl {
 	u32 index;
 	int irq;
 	bool enabled;
+
+#ifdef CONFIG_MHI_EP_USE_DMA
+	struct dma_chan *dma_rx, *dma_tx;
+#endif
 };
 
 /**

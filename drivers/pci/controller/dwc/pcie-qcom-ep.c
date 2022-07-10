@@ -13,12 +13,14 @@
 #include <linux/delay.h>
 #include <linux/gpio/consumer.h>
 #include <linux/mfd/syscon.h>
+#include <linux/of_device.h>
 #include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include <linux/pm_domain.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>
 #include <linux/module.h>
+#include <linux/dma/edma.h>
 
 #include "pcie-designware.h"
 
@@ -66,6 +68,7 @@
 #define PARF_INT_ALL_PLS_ERR			BIT(15)
 #define PARF_INT_ALL_PME_LEGACY			BIT(16)
 #define PARF_INT_ALL_PLS_PME			BIT(17)
+#define PARF_INT_ALL_EDMA			BIT(22)
 
 /* PARF_BDF_TO_SID_CFG register fields */
 #define PARF_BDF_TO_SID_BYPASS			BIT(0)
@@ -130,18 +133,21 @@ enum qcom_pcie_ep_link_status {
 	QCOM_PCIE_EP_LINK_DOWN,
 };
 
-static struct clk_bulk_data qcom_pcie_ep_clks[] = {
-	{ .id = "cfg" },
-	{ .id = "aux" },
-	{ .id = "bus_master" },
-	{ .id = "bus_slave" },
-	{ .id = "ref" },
-	{ .id = "sleep" },
-	{ .id = "slave_q2a" },
+struct qcom_pcie_cfg {
+	const char **clocks;
+	unsigned int num_clocks;
+
+	bool has_tcsr;
+	bool has_pipe_clk;
+	bool pipe_clk_need_muxing;
 };
 
 struct qcom_pcie_ep {
 	struct dw_pcie pci;
+
+	const struct qcom_pcie_cfg *cfg;
+
+	struct clk_bulk_data *clocks;
 
 	void __iomem *parf;
 	void __iomem *elbi;
@@ -159,6 +165,14 @@ struct qcom_pcie_ep {
 	enum qcom_pcie_ep_link_status link_status;
 	int global_irq;
 	int perst_irq;
+
+	struct clk *pipe_clk;
+
+	struct clk *pipe_clk_src;
+	struct clk *phy_pipe_clk;
+	struct clk *ref_clk_src;
+
+	struct dw_edma_chip *edma;
 };
 
 static int qcom_pcie_ep_core_reset(struct qcom_pcie_ep *pcie_ep)
@@ -227,8 +241,8 @@ static int qcom_pcie_enable_resources(struct qcom_pcie_ep *pcie_ep)
 {
 	int ret;
 
-	ret = clk_bulk_prepare_enable(ARRAY_SIZE(qcom_pcie_ep_clks),
-				      qcom_pcie_ep_clks);
+	ret = clk_bulk_prepare_enable(pcie_ep->cfg->num_clocks,
+				      pcie_ep->clocks);
 	if (ret)
 		return ret;
 
@@ -244,23 +258,43 @@ static int qcom_pcie_enable_resources(struct qcom_pcie_ep *pcie_ep)
 	if (ret)
 		goto err_phy_exit;
 
+	/* Set pipe clock as clock source for pcie_pipe_clk_src */
+	if (pcie_ep->cfg->pipe_clk_need_muxing)
+		clk_set_parent(pcie_ep->pipe_clk_src, pcie_ep->phy_pipe_clk);
+
+	if (pcie_ep->cfg->has_pipe_clk) {
+		ret = clk_prepare_enable(pcie_ep->pipe_clk);
+		if (ret) {
+			dev_err(pcie_ep->pci.dev, "cannot prepare/enable pipe clock\n");
+			goto err_phy_power_off;
+		}
+	}
+
 	return 0;
 
+err_phy_power_off:
+	phy_power_off(pcie_ep->phy);
 err_phy_exit:
 	phy_exit(pcie_ep->phy);
 err_disable_clk:
-	clk_bulk_disable_unprepare(ARRAY_SIZE(qcom_pcie_ep_clks),
-				   qcom_pcie_ep_clks);
+	clk_bulk_disable_unprepare(pcie_ep->cfg->num_clocks,
+				   pcie_ep->clocks);
 
 	return ret;
 }
 
 static void qcom_pcie_disable_resources(struct qcom_pcie_ep *pcie_ep)
 {
+	if (pcie_ep->cfg->has_pipe_clk)
+		clk_disable_unprepare(pcie_ep->pipe_clk);
 	phy_power_off(pcie_ep->phy);
 	phy_exit(pcie_ep->phy);
-	clk_bulk_disable_unprepare(ARRAY_SIZE(qcom_pcie_ep_clks),
-				   qcom_pcie_ep_clks);
+	clk_bulk_disable_unprepare(pcie_ep->cfg->num_clocks,
+				   pcie_ep->clocks);
+
+	/* Set TCXO as clock source for pcie_pipe_clk_src */
+	if (pcie_ep->cfg->pipe_clk_need_muxing)
+		clk_set_parent(pcie_ep->pipe_clk_src, pcie_ep->ref_clk_src);
 }
 
 static int qcom_pcie_perst_deassert(struct dw_pcie *pci)
@@ -276,12 +310,20 @@ static int qcom_pcie_perst_deassert(struct dw_pcie *pci)
 		return ret;
 	}
 
+	/* We can probe eDMA only after resources are enabled */
+	ret = dw_edma_probe(pcie_ep->edma);
+	if (ret) {
+		dev_err(dev, "Failed to probe eDMA: %d\n", ret);
+		goto err_disable_resources;
+	}
+
 	/* Assert WAKE# to RC to indicate device is ready */
 	gpiod_set_value_cansleep(pcie_ep->wake, 1);
 	usleep_range(WAKE_DELAY_US, WAKE_DELAY_US + 500);
 	gpiod_set_value_cansleep(pcie_ep->wake, 0);
 
-	qcom_pcie_ep_configure_tcsr(pcie_ep);
+	if (pcie_ep->cfg->has_tcsr)
+		qcom_pcie_ep_configure_tcsr(pcie_ep);
 
 	/* Disable BDF to SID mapping */
 	val = readl_relaxed(pcie_ep->parf + PARF_BDF_TO_SID_CFG);
@@ -298,9 +340,9 @@ static int qcom_pcie_perst_deassert(struct dw_pcie *pci)
 	/* Configure PCIe to endpoint mode */
 	writel_relaxed(PARF_DEVICE_TYPE_EP, pcie_ep->parf + PARF_DEVICE_TYPE);
 
-	/* Allow entering L1 state */
+	/* Don't allow L1 state */
 	val = readl_relaxed(pcie_ep->parf + PARF_PM_CTRL);
-	val &= ~PARF_PM_CTRL_REQ_NOT_ENTR_L1;
+	val |= PARF_PM_CTRL_REQ_NOT_ENTR_L1;
 	writel_relaxed(val, pcie_ep->parf + PARF_PM_CTRL);
 
 	/* Read halts write */
@@ -359,6 +401,7 @@ static int qcom_pcie_perst_deassert(struct dw_pcie *pci)
 	val = PARF_INT_ALL_LINK_DOWN | PARF_INT_ALL_BME |
 	      PARF_INT_ALL_PM_TURNOFF | PARF_INT_ALL_DSTATE_CHANGE |
 	      PARF_INT_ALL_LINK_UP;
+	val |= PARF_INT_ALL_EDMA;
 	writel_relaxed(val, pcie_ep->parf + PARF_INT_ALL_MASK);
 
 	ret = dw_pcie_ep_init_complete(&pcie_ep->pci.ep);
@@ -394,10 +437,24 @@ static void qcom_pcie_perst_assert(struct dw_pcie *pci)
 {
 	struct qcom_pcie_ep *pcie_ep = to_pcie_ep(pci);
 	struct device *dev = pci->dev;
+	int ret;
 
 	if (pcie_ep->link_status == QCOM_PCIE_EP_LINK_DISABLED) {
-		dev_dbg(dev, "Link is already disabled\n");
+		dev_info(dev, "Link is already disabled\n");
 		return;
+	}
+
+	/* In case PERST# assert comes before Link down, trigger it manually */
+	if (pcie_ep->link_status != QCOM_PCIE_EP_LINK_DOWN) {
+		dev_info(dev, "Sending link disable event\n");
+		pcie_ep->link_status = QCOM_PCIE_EP_LINK_DOWN;
+		pci_epc_linkdown(pci->ep.epc);
+	}
+
+	if (pcie_ep->edma) {
+		ret = dw_edma_remove(pcie_ep->edma);
+		if (ret < 0)
+			dev_warn(dev, "can't remove eDMA properly: %d\n", ret);
 	}
 
 	qcom_pcie_disable_resources(pcie_ep);
@@ -411,32 +468,10 @@ static const struct dw_pcie_ops pci_ops = {
 	.stop_link = qcom_pcie_dw_stop_link,
 };
 
-static int qcom_pcie_ep_get_io_resources(struct platform_device *pdev,
-					 struct qcom_pcie_ep *pcie_ep)
+static int qcom_pcie_ep_get_tcsr(struct device *dev, struct qcom_pcie_ep *pcie_ep)
 {
-	struct device *dev = &pdev->dev;
-	struct dw_pcie *pci = &pcie_ep->pci;
 	struct device_node *syscon;
-	struct resource *res;
 	int ret;
-
-	pcie_ep->parf = devm_platform_ioremap_resource_byname(pdev, "parf");
-	if (IS_ERR(pcie_ep->parf))
-		return PTR_ERR(pcie_ep->parf);
-
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "dbi");
-	pci->dbi_base = devm_pci_remap_cfg_resource(dev, res);
-	if (IS_ERR(pci->dbi_base))
-		return PTR_ERR(pci->dbi_base);
-	pci->dbi_base2 = pci->dbi_base;
-
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "elbi");
-	pcie_ep->elbi = devm_pci_remap_cfg_resource(dev, res);
-	if (IS_ERR(pcie_ep->elbi))
-		return PTR_ERR(pcie_ep->elbi);
-
-	pcie_ep->mmio_res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
-							 "mmio");
 
 	syscon = of_parse_phandle(dev->of_node, "qcom,perst-regs", 0);
 	if (!syscon) {
@@ -466,6 +501,41 @@ static int qcom_pcie_ep_get_io_resources(struct platform_device *pdev,
 	return 0;
 }
 
+static int qcom_pcie_ep_get_io_resources(struct platform_device *pdev,
+					 struct qcom_pcie_ep *pcie_ep)
+{
+	struct device *dev = &pdev->dev;
+	struct dw_pcie *pci = &pcie_ep->pci;
+	struct resource *res;
+	int ret;
+
+	pcie_ep->parf = devm_platform_ioremap_resource_byname(pdev, "parf");
+	if (IS_ERR(pcie_ep->parf))
+		return PTR_ERR(pcie_ep->parf);
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "dbi");
+	pci->dbi_base = devm_pci_remap_cfg_resource(dev, res);
+	if (IS_ERR(pci->dbi_base))
+		return PTR_ERR(pci->dbi_base);
+	pci->dbi_base2 = pci->dbi_base;
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "elbi");
+	pcie_ep->elbi = devm_pci_remap_cfg_resource(dev, res);
+	if (IS_ERR(pcie_ep->elbi))
+		return PTR_ERR(pcie_ep->elbi);
+
+	pcie_ep->mmio_res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
+							 "mmio");
+
+	if (pcie_ep->cfg->has_tcsr) {
+		ret = qcom_pcie_ep_get_tcsr(dev, pcie_ep);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
 static int qcom_pcie_ep_get_resources(struct platform_device *pdev,
 				      struct qcom_pcie_ep *pcie_ep)
 {
@@ -478,10 +548,30 @@ static int qcom_pcie_ep_get_resources(struct platform_device *pdev,
 		return ret;
 	}
 
-	ret = devm_clk_bulk_get(dev, ARRAY_SIZE(qcom_pcie_ep_clks),
-				qcom_pcie_ep_clks);
+	ret = devm_clk_bulk_get(dev, pcie_ep->cfg->num_clocks,
+				pcie_ep->clocks);
 	if (ret)
 		return ret;
+
+	if (pcie_ep->cfg->pipe_clk_need_muxing) {
+		pcie_ep->pipe_clk_src = devm_clk_get(dev, "pipe_mux");
+		if (IS_ERR(pcie_ep->pipe_clk_src))
+			return PTR_ERR(pcie_ep->pipe_clk_src);
+
+		pcie_ep->phy_pipe_clk = devm_clk_get(dev, "phy_pipe");
+		if (IS_ERR(pcie_ep->phy_pipe_clk))
+			return PTR_ERR(pcie_ep->phy_pipe_clk);
+
+		pcie_ep->ref_clk_src = devm_clk_get(dev, "ref");
+		if (IS_ERR(pcie_ep->ref_clk_src))
+			return PTR_ERR(pcie_ep->ref_clk_src);
+	}
+
+	if (pcie_ep->cfg->has_pipe_clk) {
+		pcie_ep->pipe_clk = devm_clk_get(dev, "pipe");
+		if (IS_ERR(pcie_ep->pipe_clk))
+			return PTR_ERR(pcie_ep->pipe_clk);
+	}
 
 	pcie_ep->core_reset = devm_reset_control_get_exclusive(dev, "core");
 	if (IS_ERR(pcie_ep->core_reset))
@@ -516,31 +606,32 @@ static irqreturn_t qcom_pcie_ep_global_irq_thread(int irq, void *data)
 	status &= mask;
 
 	if (FIELD_GET(PARF_INT_ALL_LINK_DOWN, status)) {
-		dev_dbg(dev, "Received Linkdown event\n");
-		pcie_ep->link_status = QCOM_PCIE_EP_LINK_DOWN;
+		dev_info(dev, "Received Linkdown event\n");
+		/* PERST# assert can come before Link down, handle both events in PERST */
 	} else if (FIELD_GET(PARF_INT_ALL_BME, status)) {
-		dev_dbg(dev, "Received BME event. Link is enabled!\n");
+		dev_info(dev, "Received BME event. Link is enabled!\n");
 		pcie_ep->link_status = QCOM_PCIE_EP_LINK_ENABLED;
+		pci_epc_bme_notify(pci->ep.epc);
 	} else if (FIELD_GET(PARF_INT_ALL_PM_TURNOFF, status)) {
-		dev_dbg(dev, "Received PM Turn-off event! Entering L23\n");
+		dev_info(dev, "Received PM Turn-off event! Entering L23\n");
 		val = readl_relaxed(pcie_ep->parf + PARF_PM_CTRL);
 		val |= PARF_PM_CTRL_READY_ENTR_L23;
 		writel_relaxed(val, pcie_ep->parf + PARF_PM_CTRL);
 	} else if (FIELD_GET(PARF_INT_ALL_DSTATE_CHANGE, status)) {
 		dstate = dw_pcie_readl_dbi(pci, DBI_CON_STATUS) &
 					   DBI_CON_STATUS_POWER_STATE_MASK;
-		dev_dbg(dev, "Received D%d state event\n", dstate);
+		dev_info(dev, "Received D%d state event\n", dstate);
 		if (dstate == 3) {
 			val = readl_relaxed(pcie_ep->parf + PARF_PM_CTRL);
 			val |= PARF_PM_CTRL_REQ_EXIT_L1;
 			writel_relaxed(val, pcie_ep->parf + PARF_PM_CTRL);
 		}
 	} else if (FIELD_GET(PARF_INT_ALL_LINK_UP, status)) {
-		dev_dbg(dev, "Received Linkup event. Enumeration complete!\n");
+		dev_info(dev, "Received Linkup event. Enumeration complete!\n");
 		dw_pcie_ep_linkup(&pci->ep);
 		pcie_ep->link_status = QCOM_PCIE_EP_LINK_UP;
 	} else {
-		dev_dbg(dev, "Received unknown event: %d\n", status);
+		dev_info(dev, "Received unknown event: %d\n", status);
 	}
 
 	return IRQ_HANDLED;
@@ -555,10 +646,10 @@ static irqreturn_t qcom_pcie_ep_perst_irq_thread(int irq, void *data)
 
 	perst = gpiod_get_value(pcie_ep->reset);
 	if (perst) {
-		dev_dbg(dev, "PERST asserted by host. Shutting down the PCIe link!\n");
+		dev_info(dev, "PERST asserted by host. Shutting down the PCIe link!\n");
 		qcom_pcie_perst_assert(pci);
 	} else {
-		dev_dbg(dev, "PERST de-asserted by host. Starting link training!\n");
+		dev_info(dev, "PERST de-asserted by host. Starting link training!\n");
 		qcom_pcie_perst_deassert(pci);
 	}
 
@@ -649,11 +740,25 @@ static int qcom_pcie_ep_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct qcom_pcie_ep *pcie_ep;
-	int ret;
+	const struct qcom_pcie_cfg *pcie_cfg;
+	int i, ret;
+
+	pcie_cfg = of_device_get_match_data(dev);
+	if (!pcie_cfg)
+		return -EINVAL;
 
 	pcie_ep = devm_kzalloc(dev, sizeof(*pcie_ep), GFP_KERNEL);
 	if (!pcie_ep)
 		return -ENOMEM;
+
+	pcie_ep->cfg = pcie_cfg;
+
+	pcie_ep->clocks = devm_kcalloc(dev, pcie_ep->cfg->num_clocks, sizeof(*pcie_ep->clocks), GFP_KERNEL);
+	if (!pcie_ep->clocks)
+		return -ENOMEM;
+
+	for (i = 0; i < pcie_ep->cfg->num_clocks; i++)
+		pcie_ep->clocks[i].id = pcie_ep->cfg->clocks[i];
 
 	pcie_ep->pci.dev = dev;
 	pcie_ep->pci.ops = &pci_ops;
@@ -664,28 +769,25 @@ static int qcom_pcie_ep_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	ret = qcom_pcie_enable_resources(pcie_ep);
-	if (ret) {
-		dev_err(dev, "Failed to enable resources: %d\n", ret);
-		return ret;
+	pcie_ep->edma = dw_edma_qcom_probe(to_platform_device(dev));
+	if (IS_ERR(pcie_ep->edma)) {
+		ret = PTR_ERR(pcie_ep->edma);
+		return dev_err_probe(dev, ret, "Failed to probe eDMA\n");
 	}
 
+	/* Set TCXO as clock source for pcie_pipe_clk_src */
+	if (pcie_ep->cfg->pipe_clk_need_muxing)
+		clk_set_parent(pcie_ep->pipe_clk_src, pcie_ep->ref_clk_src);
+
 	ret = dw_pcie_ep_init(&pcie_ep->pci.ep);
-	if (ret) {
-		dev_err(dev, "Failed to initialize endpoint: %d\n", ret);
-		goto err_disable_resources;
-	}
+	if (ret)
+		return dev_err_probe(dev, ret, "Failed to initialize endpoint\n");
 
 	ret = qcom_pcie_ep_enable_irq_resources(pdev, pcie_ep);
 	if (ret)
-		goto err_disable_resources;
+		return dev_err_probe(dev, ret, "Failed to enable endpoint interrupts\n");
 
 	return 0;
-
-err_disable_resources:
-	qcom_pcie_disable_resources(pcie_ep);
-
-	return ret;
 }
 
 static int qcom_pcie_ep_remove(struct platform_device *pdev)
@@ -700,10 +802,46 @@ static int qcom_pcie_ep_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static const char * sdx55_clocks[] = {
+	"cfg",
+	"aux",
+	"bus_master",
+	"bus_slave",
+	"ref",
+	"sleep",
+	"slave_q2a",
+};
+
+static const struct qcom_pcie_cfg sdx55_cfg = {
+	.clocks = sdx55_clocks,
+	.num_clocks = ARRAY_SIZE(sdx55_clocks),
+	.has_tcsr = true,
+};
+
+static const char * sm8450_clocks[] = {
+	"cfg",
+	"aux",
+	"bus_master",
+	"bus_slave",
+	"ref",
+	"slave_q2a",
+	"ddrss_sf_tbu",
+	"aggre_noc_axi",
+};
+
+static const struct qcom_pcie_cfg sm8450_cfg = {
+	.clocks = sm8450_clocks,
+	.num_clocks = ARRAY_SIZE(sm8450_clocks),
+	.has_pipe_clk = true,
+	.pipe_clk_need_muxing = true,
+};
+
 static const struct of_device_id qcom_pcie_ep_match[] = {
-	{ .compatible = "qcom,sdx55-pcie-ep", },
+	{ .compatible = "qcom,sdx55-pcie-ep", .data = &sdx55_cfg },
+	{ .compatible = "qcom,sm8450-pcie-ep", .data = &sm8450_cfg },
 	{ }
 };
+MODULE_DEVICE_TABLE(of, qcom_pcie_ep_match);
 
 static struct platform_driver qcom_pcie_ep_driver = {
 	.probe	= qcom_pcie_ep_probe,

@@ -7,6 +7,7 @@
  */
 
 #include <linux/bitfield.h>
+#include <linux/completion.h>
 #include <linux/delay.h>
 #include <linux/dma-direction.h>
 #include <linux/interrupt.h>
@@ -15,6 +16,7 @@
 #include <linux/mhi_ep.h>
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
+#include <linux/of_dma.h>
 #include "internal.h"
 
 #define M0_WAIT_DELAY_MS	100
@@ -273,6 +275,143 @@ bool mhi_ep_queue_is_empty(struct mhi_ep_device *mhi_dev, enum dma_data_directio
 }
 EXPORT_SYMBOL_GPL(mhi_ep_queue_is_empty);
 
+#ifdef CONFIG_MHI_EP_USE_DMA
+static void mhi_dma_callback(void *dma_async_param)
+{
+	complete(dma_async_param);
+}
+
+static int mhi_ep_copy_from_device(struct mhi_ep_cntrl *mhi_cntrl,
+				   u64 pci_addr,
+				   void *memptr,
+				   size_t size)
+{
+	struct dma_chan *chan = mhi_cntrl->dma_rx;
+	struct device *dev = &mhi_cntrl->mhi_dev->dev;
+	struct scatterlist sgl;
+	struct device *dma_dev = dmaengine_get_dma_device(chan);
+	int nr_sg;
+	struct dma_slave_config config;
+	struct dma_async_tx_descriptor *desc;
+	dma_cookie_t cookie;
+	DECLARE_COMPLETION_ONSTACK(complete);
+	int ret;
+
+	config.direction = DMA_DEV_TO_MEM;
+	config.src_addr = pci_addr;
+	config.dst_addr = pci_addr;
+	config.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+	config.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+
+	ret = dmaengine_slave_config(chan, &config);
+	if (ret < 0) {
+		dev_err(dev, "Failed to configure the chan: %d\n", ret);
+		return ret;
+	}
+
+	sg_init_one(&sgl, memptr, size);
+	nr_sg = dma_map_sg(dma_dev, &sgl, 1, DMA_FROM_DEVICE);
+	if (nr_sg == 0) {
+		dev_err(dev, "Failed to map SG list\n");
+		return -EIO;
+	}
+
+	desc = dmaengine_prep_slave_sg(chan, &sgl, nr_sg, DMA_DEV_TO_MEM, DMA_PREP_INTERRUPT);
+	if (!desc) {
+		dev_err(dev, "Failed to create a descriptor\n");
+		return -EIO;
+	}
+
+	desc->callback = mhi_dma_callback;
+	desc->callback_param = &complete;
+
+	cookie = dmaengine_submit(desc);
+	dma_async_issue_pending(chan);
+
+	if (!wait_for_completion_timeout(&complete, msecs_to_jiffies(1000))) {
+		dev_err(dev, "DMA transfer timeout\n");
+		return -ETIMEDOUT;
+	}
+
+	dma_unmap_sg(dma_dev, &sgl, nr_sg, DMA_FROM_DEVICE);
+
+	return 0;
+}
+
+static int mhi_ep_copy_to_device(struct mhi_ep_cntrl *mhi_cntrl,
+				 void *memptr,
+				 u64 pci_addr,
+				 size_t size)
+{
+	struct dma_chan *chan = mhi_cntrl->dma_tx;
+	struct device *dev = &mhi_cntrl->mhi_dev->dev;
+	struct scatterlist sgl;
+	struct device *dma_dev = dmaengine_get_dma_device(chan);
+	int nr_sg;
+	struct dma_slave_config config;
+	struct dma_async_tx_descriptor *desc;
+	dma_cookie_t cookie;
+	DECLARE_COMPLETION_ONSTACK(complete);
+	int ret;
+
+	config.direction = DMA_MEM_TO_DEV;
+	config.src_addr = pci_addr;
+	config.dst_addr = pci_addr;
+	config.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+	config.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+
+	ret = dmaengine_slave_config(chan, &config);
+	if (ret < 0) {
+		dev_err(dev, "Failed to configure the chan: %d\n", ret);
+		return ret;
+	}
+
+	sg_init_one(&sgl, memptr, size);
+	nr_sg = dma_map_sg(dma_dev, &sgl, 1, DMA_TO_DEVICE);
+	if (nr_sg == 0) {
+		dev_err(dev, "Failed to map SG list\n");
+		return -EIO;
+	}
+
+	desc = dmaengine_prep_slave_sg(chan, &sgl, nr_sg, DMA_MEM_TO_DEV, DMA_PREP_INTERRUPT);
+	if (!desc) {
+		dev_err(dev, "Failed to create a descriptor\n");
+		return -EIO;
+	}
+
+	desc->callback = mhi_dma_callback;
+	desc->callback_param = &complete;
+
+	cookie = dmaengine_submit(desc);
+	dma_async_issue_pending(chan);
+
+	if (!wait_for_completion_timeout(&complete, msecs_to_jiffies(1000))) {
+		dev_err(dev, "DMA transfer timeout\n");
+		return -ETIMEDOUT;
+	}
+
+	dma_unmap_sg(dma_dev, &sgl, nr_sg, DMA_TO_DEVICE);
+
+	return 0;
+}
+#else
+static int mhi_ep_copy_from_device(struct mhi_ep_cntrl *mhi_cntrl,
+				   u64 pci_addr,
+				   void *memptr,
+				   size_t size)
+{
+	return mhi_cntrl->read_from_host(mhi_cntrl, pci_addr, memptr, size);
+}
+
+static int mhi_ep_copy_to_device(struct mhi_ep_cntrl *mhi_cntrl,
+				   void *memptr,
+				   u64 pci_addr,
+				   size_t size)
+{
+	return mhi_cntrl->write_to_host(mhi_cntrl, memptr, pci_addr, size);
+}
+#endif
+
 static int mhi_ep_read_channel(struct mhi_ep_cntrl *mhi_cntrl,
 				struct mhi_ep_ring *ring,
 				struct mhi_result *result,
@@ -317,7 +456,7 @@ static int mhi_ep_read_channel(struct mhi_ep_cntrl *mhi_cntrl,
 		write_addr = result->buf_addr + write_offset;
 
 		dev_dbg(dev, "Reading %zd bytes from channel (%u)\n", tr_len, ring->ch_id);
-		ret = mhi_cntrl->read_from_host(mhi_cntrl, read_addr, write_addr, tr_len);
+		ret = mhi_ep_copy_from_device(mhi_cntrl, read_addr, write_addr, tr_len);
 		if (ret < 0) {
 			dev_err(&mhi_chan->mhi_dev->dev, "Error reading from channel\n");
 			return ret;
@@ -478,7 +617,7 @@ int mhi_ep_queue_skb(struct mhi_ep_device *mhi_dev, struct sk_buff *skb)
 		write_addr = MHI_TRE_DATA_GET_PTR(el);
 
 		dev_dbg(dev, "Writing %zd bytes to channel (%u)\n", tr_len, ring->ch_id);
-		ret = mhi_cntrl->write_to_host(mhi_cntrl, read_addr, write_addr, tr_len);
+		ret = mhi_ep_copy_to_device(mhi_cntrl, read_addr, write_addr, tr_len);
 		if (ret < 0) {
 			dev_err(dev, "Error writing to the channel\n");
 			goto err_exit;
@@ -973,11 +1112,9 @@ static void mhi_ep_abort_transfer(struct mhi_ep_cntrl *mhi_cntrl)
 static void mhi_ep_reset_worker(struct work_struct *work)
 {
 	struct mhi_ep_cntrl *mhi_cntrl = container_of(work, struct mhi_ep_cntrl, reset_work);
-	struct device *dev = &mhi_cntrl->mhi_dev->dev;
 	enum mhi_state cur_state;
-	int ret;
 
-	mhi_ep_abort_transfer(mhi_cntrl);
+	mhi_ep_power_down(mhi_cntrl);
 
 	spin_lock_bh(&mhi_cntrl->state_lock);
 	/* Reset MMIO to signal host that the MHI_RESET is completed in endpoint */
@@ -990,27 +1127,8 @@ static void mhi_ep_reset_worker(struct work_struct *work)
 	 * issue reset during shutdown also and we don't need to do re-init in
 	 * that case.
 	 */
-	if (cur_state == MHI_STATE_SYS_ERR) {
-		mhi_ep_mmio_init(mhi_cntrl);
-
-		/* Set AMSS EE before signaling ready state */
-		mhi_ep_mmio_set_env(mhi_cntrl, MHI_EE_AMSS);
-
-		/* All set, notify the host that we are ready */
-		ret = mhi_ep_set_ready_state(mhi_cntrl);
-		if (ret)
-			return;
-
-		dev_dbg(dev, "READY state notification sent to the host\n");
-
-		ret = mhi_ep_enable(mhi_cntrl);
-		if (ret) {
-			dev_err(dev, "Failed to enable MHI endpoint: %d\n", ret);
-			return;
-		}
-
-		enable_irq(mhi_cntrl->irq);
-	}
+	if (cur_state == MHI_STATE_SYS_ERR)
+		mhi_ep_power_up(mhi_cntrl);
 }
 
 /*
@@ -1089,11 +1207,11 @@ EXPORT_SYMBOL_GPL(mhi_ep_power_up);
 
 void mhi_ep_power_down(struct mhi_ep_cntrl *mhi_cntrl)
 {
-	if (mhi_cntrl->enabled)
+	if (mhi_cntrl->enabled) {
 		mhi_ep_abort_transfer(mhi_cntrl);
-
-	kfree(mhi_cntrl->mhi_event);
-	disable_irq(mhi_cntrl->irq);
+		kfree(mhi_cntrl->mhi_event);
+		disable_irq(mhi_cntrl->irq);
+	}
 }
 EXPORT_SYMBOL_GPL(mhi_ep_power_down);
 
@@ -1162,21 +1280,11 @@ static void mhi_ep_release_device(struct device *dev)
 	if (mhi_dev->dev_type == MHI_DEVICE_CONTROLLER)
 		mhi_dev->mhi_cntrl->mhi_dev = NULL;
 
-	/*
-	 * We need to set the mhi_chan->mhi_dev to NULL here since the MHI
-	 * devices for the channels will only get created in mhi_ep_create_device()
-	 * if the mhi_dev associated with it is NULL.
-	 */
-	if (mhi_dev->ul_chan)
-		mhi_dev->ul_chan->mhi_dev = NULL;
-
-	if (mhi_dev->dl_chan)
-		mhi_dev->dl_chan->mhi_dev = NULL;
-
 	kfree(mhi_dev);
 }
 
 static struct mhi_ep_device *mhi_ep_alloc_device(struct mhi_ep_cntrl *mhi_cntrl,
+						 struct device *parent,
 						 enum mhi_device_type dev_type)
 {
 	struct mhi_ep_device *mhi_dev;
@@ -1191,13 +1299,7 @@ static struct mhi_ep_device *mhi_ep_alloc_device(struct mhi_ep_cntrl *mhi_cntrl,
 	dev->bus = &mhi_ep_bus_type;
 	dev->release = mhi_ep_release_device;
 
-	/* Controller device is always allocated first */
-	if (dev_type == MHI_DEVICE_CONTROLLER)
-		/* for MHI controller device, parent is the bus device (e.g. PCI EPF) */
-		dev->parent = mhi_cntrl->cntrl_dev;
-	else
-		/* for MHI client devices, parent is the MHI controller device */
-		dev->parent = &mhi_cntrl->mhi_dev->dev;
+	dev->parent = parent;
 
 	mhi_dev->mhi_cntrl = mhi_cntrl;
 	mhi_dev->dev_type = dev_type;
@@ -1225,7 +1327,7 @@ static int mhi_ep_create_device(struct mhi_ep_cntrl *mhi_cntrl, u32 ch_id)
 		return -EINVAL;
 	}
 
-	mhi_dev = mhi_ep_alloc_device(mhi_cntrl, MHI_DEVICE_XFER);
+	mhi_dev = mhi_ep_alloc_device(mhi_cntrl, &mhi_cntrl->mhi_dev->dev, MHI_DEVICE_XFER);
 	if (IS_ERR(mhi_dev))
 		return PTR_ERR(mhi_dev);
 
@@ -1272,17 +1374,22 @@ static int mhi_ep_destroy_device(struct device *dev, void *data)
 	ul_chan = mhi_dev->ul_chan;
 	dl_chan = mhi_dev->dl_chan;
 
-	if (ul_chan)
-		put_device(&ul_chan->mhi_dev->dev);
+	/* Notify the client and remove the device from MHI bus */
+	device_del(dev);
 
-	if (dl_chan)
+	if (ul_chan) {
+		put_device(&ul_chan->mhi_dev->dev);
+		ul_chan->mhi_dev = NULL;
+	}
+
+	if (dl_chan) {
 		put_device(&dl_chan->mhi_dev->dev);
+		dl_chan->mhi_dev = NULL;
+	}
 
 	dev_dbg(&mhi_cntrl->mhi_dev->dev, "Destroying device for chan:%s\n",
 		 mhi_dev->name);
 
-	/* Notify the client and remove the device from MHI bus */
-	device_del(dev);
 	put_device(dev);
 
 	return 0;
@@ -1364,6 +1471,20 @@ int mhi_ep_register_controller(struct mhi_ep_cntrl *mhi_cntrl,
 		goto err_free_ch;
 	}
 
+#ifdef CONFIG_MHI_EP_USE_DMA
+	mhi_cntrl->dma_rx = of_dma_request_slave_channel(mhi_cntrl->cntrl_dev->of_node, "rx");
+	if (IS_ERR(mhi_cntrl->dma_rx)) {
+		ret = PTR_ERR(mhi_cntrl->dma_rx);
+		goto err_free_cmd;
+	}
+
+	mhi_cntrl->dma_tx = of_dma_request_slave_channel(mhi_cntrl->cntrl_dev->of_node, "tx");
+	if (IS_ERR(mhi_cntrl->dma_tx)) {
+		ret = PTR_ERR(mhi_cntrl->dma_tx);
+		goto err_free_dma_rx;
+	}
+#endif
+
 	INIT_WORK(&mhi_cntrl->state_work, mhi_ep_state_worker);
 	INIT_WORK(&mhi_cntrl->reset_work, mhi_ep_reset_worker);
 	INIT_WORK(&mhi_cntrl->cmd_ring_work, mhi_ep_cmd_ring_worker);
@@ -1372,7 +1493,11 @@ int mhi_ep_register_controller(struct mhi_ep_cntrl *mhi_cntrl,
 	mhi_cntrl->wq = alloc_workqueue("mhi_ep_wq", 0, 0);
 	if (!mhi_cntrl->wq) {
 		ret = -ENOMEM;
+#ifdef CONFIG_MHI_EP_USE_DMA
+		goto err_free_dma_tx;
+#else
 		goto err_free_cmd;
+#endif
 	}
 
 	INIT_LIST_HEAD(&mhi_cntrl->st_transition_list);
@@ -1401,7 +1526,8 @@ int mhi_ep_register_controller(struct mhi_ep_cntrl *mhi_cntrl,
 	}
 
 	/* Allocate the controller device */
-	mhi_dev = mhi_ep_alloc_device(mhi_cntrl, MHI_DEVICE_CONTROLLER);
+	/* for MHI controller device, parent is the bus device (e.g. PCI EPF) */
+	mhi_dev = mhi_ep_alloc_device(mhi_cntrl, mhi_cntrl->cntrl_dev, MHI_DEVICE_CONTROLLER);
 	if (IS_ERR(mhi_dev)) {
 		dev_err(mhi_cntrl->cntrl_dev, "Failed to allocate controller device\n");
 		ret = PTR_ERR(mhi_dev);
@@ -1428,6 +1554,12 @@ err_ida_free:
 	ida_free(&mhi_ep_cntrl_ida, mhi_cntrl->index);
 err_destroy_wq:
 	destroy_workqueue(mhi_cntrl->wq);
+#ifdef CONFIG_MHI_EP_USE_DMA
+err_free_dma_tx:
+	dma_release_channel(mhi_cntrl->dma_tx);
+err_free_dma_rx:
+	dma_release_channel(mhi_cntrl->dma_rx);
+#endif
 err_free_cmd:
 	kfree(mhi_cntrl->mhi_cmd);
 err_free_ch:
@@ -1449,11 +1581,17 @@ void mhi_ep_unregister_controller(struct mhi_ep_cntrl *mhi_cntrl)
 
 	free_irq(mhi_cntrl->irq, mhi_cntrl);
 
+#ifdef CONFIG_MHI_EP_USE_DMA
+	dma_release_channel(mhi_cntrl->dma_tx);
+	dma_release_channel(mhi_cntrl->dma_rx);
+#endif
+
 	kfree(mhi_cntrl->mhi_cmd);
 	kfree(mhi_cntrl->mhi_chan);
 
 	device_del(&mhi_dev->dev);
 	put_device(&mhi_dev->dev);
+	mhi_cntrl->mhi_dev = NULL;
 
 	ida_free(&mhi_ep_cntrl_ida, mhi_cntrl->index);
 }

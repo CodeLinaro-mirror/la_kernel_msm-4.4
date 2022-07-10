@@ -979,7 +979,8 @@ int mhi_register_controller(struct mhi_controller *mhi_cntrl,
 	}
 
 	/* Register controller with MHI bus */
-	mhi_dev = mhi_alloc_device(mhi_cntrl);
+	/* for MHI controller device, parent is the bus device (e.g. pci device) */
+	mhi_dev = mhi_alloc_device(mhi_cntrl, mhi_cntrl->cntrl_dev);
 	if (IS_ERR(mhi_dev)) {
 		dev_err(mhi_cntrl->cntrl_dev, "Failed to allocate MHI device\n");
 		ret = PTR_ERR(mhi_dev);
@@ -1043,6 +1044,7 @@ void mhi_unregister_controller(struct mhi_controller *mhi_cntrl)
 
 	device_del(&mhi_dev->dev);
 	put_device(&mhi_dev->dev);
+	mhi_cntrl->mhi_dev = NULL;
 
 	ida_free(&mhi_controller_ida, mhi_cntrl->index);
 }
@@ -1169,22 +1171,10 @@ static void mhi_release_device(struct device *dev)
 {
 	struct mhi_device *mhi_dev = to_mhi_device(dev);
 
-	/*
-	 * We need to set the mhi_chan->mhi_dev to NULL here since the MHI
-	 * devices for the channels will only get created if the mhi_dev
-	 * associated with it is NULL. This scenario will happen during the
-	 * controller suspend and resume.
-	 */
-	if (mhi_dev->ul_chan)
-		mhi_dev->ul_chan->mhi_dev = NULL;
-
-	if (mhi_dev->dl_chan)
-		mhi_dev->dl_chan->mhi_dev = NULL;
-
 	kfree(mhi_dev);
 }
 
-struct mhi_device *mhi_alloc_device(struct mhi_controller *mhi_cntrl)
+struct mhi_device *mhi_alloc_device(struct mhi_controller *mhi_cntrl, struct device *parent)
 {
 	struct mhi_device *mhi_dev;
 	struct device *dev;
@@ -1198,13 +1188,7 @@ struct mhi_device *mhi_alloc_device(struct mhi_controller *mhi_cntrl)
 	dev->bus = &mhi_bus_type;
 	dev->release = mhi_release_device;
 
-	if (mhi_cntrl->mhi_dev) {
-		/* for MHI client devices, parent is the MHI controller device */
-		dev->parent = &mhi_cntrl->mhi_dev->dev;
-	} else {
-		/* for MHI controller device, parent is the bus device (e.g. pci device) */
-		dev->parent = mhi_cntrl->cntrl_dev;
-	}
+	dev->parent = parent;
 
 	mhi_dev->mhi_cntrl = mhi_cntrl;
 	mhi_dev->dev_wake = 0;

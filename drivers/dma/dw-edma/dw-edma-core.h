@@ -116,17 +116,13 @@ struct dw_edma_core_ops {
 struct dw_edma {
 	char				name[20];
 
-	struct dma_device		wr_edma;
+	struct dma_device		edma;
 	u16				wr_ch_cnt;
-
-	struct dma_device		rd_edma;
 	u16				rd_ch_cnt;
 
 	struct dw_edma_region		rg_region;	/* Registers */
 	struct dw_edma_region		ll_region_wr[EDMA_MAX_WR_CH];
 	struct dw_edma_region		ll_region_rd[EDMA_MAX_RD_CH];
-	struct dw_edma_region		dt_region_wr[EDMA_MAX_WR_CH];
-	struct dw_edma_region		dt_region_rd[EDMA_MAX_RD_CH];
 
 	struct dw_edma_irq		*irq;
 	int				nr_irqs;
