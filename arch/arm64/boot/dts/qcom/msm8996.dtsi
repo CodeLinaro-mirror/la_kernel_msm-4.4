@@ -131,6 +131,7 @@
 				entry-latency-us = <130>;
 				exit-latency-us = <80>;
 				min-residency-us = <300>;
+				local-timer-stop;
 			};
 		};
 	};
