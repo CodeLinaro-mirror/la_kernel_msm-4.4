@@ -609,7 +609,7 @@ void drm_kms_helper_hotplug_event(struct drm_device *dev)
 {
 	/* send a uevent + call fbdev */
 	drm_sysfs_hotplug_event(dev);
-	if (dev->mode_config.funcs->output_poll_changed)
+	if (dev->mode_config.funcs && dev->mode_config.funcs->output_poll_changed)
 		dev->mode_config.funcs->output_poll_changed(dev);
 
 	drm_client_dev_hotplug(dev);
