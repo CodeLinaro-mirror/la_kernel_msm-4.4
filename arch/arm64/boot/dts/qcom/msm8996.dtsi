@@ -3257,8 +3257,54 @@
 			};
 		};
 
-		saw3: syscon@9a10000 {
-			compatible = "syscon";
+		power-manager@9980000 {
+			/* CPU0 */
+			compatible = "qcom,msm8996-saw2-v3.0-cpu", "qcom,saw2";
+			reg = <0x09980000 0x1000>;
+			status = "reserved"; /* Controlled by PSCI firmware */
+		};
+
+		power-manager@9990000 {
+			/* CPU1 */
+			compatible = "qcom,msm8996-saw2-v3.0-cpu", "qcom,saw2";
+			reg = <0x09990000 0x1000>;
+			status = "reserved"; /* Controlled by PSCI firmware */
+		};
+
+		power-manager@99a0000 {
+			compatible = "qcom,msm8996-saw2-v3.0-pwr-l2", "qcom,saw2";
+			reg = <0x099a0000 0x1000>;
+			status = "reserved"; /* Controlled by PSCI firmware */
+		};
+
+		power-manager@99b0000 {
+			/* CPU2 */
+			compatible = "qcom,msm8996-saw2-v3.0-cpu", "qcom,saw2";
+			reg = <0x099b0000 0x1000>;
+			status = "reserved"; /* Controlled by PSCI firmware */
+		};
+
+		power-manager@99c0000 {
+			/* CPU3 */
+			compatible = "qcom,msm8996-saw2-v3.0-cpu", "qcom,saw2";
+			reg = <0x099c0000 0x1000>;
+			status = "reserved"; /* Controlled by PSCI firmware */
+		};
+
+		power-manager@99d0000 {
+			compatible = "qcom,msm8996-saw2-v3.0-perf-l2", "qcom,saw2";
+			reg = <0x099d0000 0x1000>;
+			status = "reserved"; /* Controlled by PSCI firmware */
+		};
+
+		power-manager@9a00000 {
+			compatible = "qcom,msm8996-saw2-v3.0-l3", "qcom,saw2";
+			reg = <0x09a00000 0x1000>;
+			status = "reserved"; /* Controlled by PSCI firmware */
+		};
+
+		power-manager@9a10000 {
+			compatible = "qcom,msm8996-saw2-v3.0-cbf", "qcom,saw2";
 			reg = <0x09a10000 0x1000>;
 		};
 
