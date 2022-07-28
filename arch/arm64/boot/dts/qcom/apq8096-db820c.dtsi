@@ -629,25 +629,6 @@
 		"NC";
 };
 
-&pm8994_spmi_regulators {
-	qcom,saw-reg = <&saw3>;
-	vdd_s11-supply = <&vph_pwr>;
-
-	s9 {
-		qcom,saw-slave;
-	};
-	s10 {
-		qcom,saw-slave;
-	};
-	s11 {
-		qcom,saw-leader;
-		regulator-name = "VDD_APCC";
-		regulator-always-on;
-		regulator-min-microvolt = <980000>;
-		regulator-max-microvolt = <980000>;
-	};
-};
-
 &pmi8994_gpios {
 	gpio-line-names =
 		"NC",
