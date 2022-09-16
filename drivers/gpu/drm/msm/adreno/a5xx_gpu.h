@@ -44,6 +44,10 @@ struct a5xx_gpu {
 
 	/* True if the microcode supports the WHERE_AM_I opcode */
 	bool has_whereami;
+
+	struct device *gxpd;
+	struct device *mxpd;
+	struct device *cprpd;
 };
 
 #define to_a5xx_gpu(x) container_of(x, struct a5xx_gpu, base)

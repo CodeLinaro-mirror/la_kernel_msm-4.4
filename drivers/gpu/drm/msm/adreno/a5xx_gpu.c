@@ -8,6 +8,7 @@
 #include <linux/qcom_scm.h>
 #include <linux/pm_opp.h>
 #include <linux/nvmem-consumer.h>
+#include <linux/pm_domain.h>
 #include <linux/slab.h>
 #include "msm_gem.h"
 #include "msm_mmu.h"
@@ -1051,6 +1052,10 @@ static void a5xx_destroy(struct msm_gpu *gpu)
 	}
 
 	adreno_gpu_cleanup(adreno_gpu);
+
+	if (a5xx_gpu->gxpd)
+		dev_pm_domain_detach(a5xx_gpu->gxpd, true);
+
 	kfree(a5xx_gpu);
 }
 
@@ -1331,7 +1336,14 @@ static void a5xx_dump(struct msm_gpu *gpu)
 static int a5xx_pm_resume(struct msm_gpu *gpu)
 {
 	struct adreno_gpu *adreno_gpu = to_adreno_gpu(gpu);
+	struct a5xx_gpu *a5xx_gpu = to_a5xx_gpu(adreno_gpu);
 	int ret;
+
+	if (a5xx_gpu->gxpd) {
+		ret = pm_runtime_resume_and_get(a5xx_gpu->gxpd);
+		if (ret < 0)
+			return ret;
+	}
 
 	/* Turn on the core power */
 	ret = msm_gpu_pm_resume(gpu);
@@ -1404,6 +1416,9 @@ static int a5xx_pm_suspend(struct msm_gpu *gpu)
 	ret = msm_gpu_pm_suspend(gpu);
 	if (ret)
 		return ret;
+
+	if (a5xx_gpu->gxpd)
+		pm_runtime_put(a5xx_gpu->gxpd);
 
 	if (a5xx_gpu->has_whereami)
 		for (i = 0; i < gpu->nr_rings; i++)
@@ -1766,6 +1781,27 @@ struct msm_gpu *a5xx_gpu_init(struct drm_device *dev)
 	adreno_gpu->registers = a5xx_registers;
 
 	a5xx_gpu->lm_leakage = 0x4E001A;
+
+	/*
+	 * If the device has several power domain (gx and cpr3), none are attached by the core.
+	 */
+	if (!pdev->dev.pm_domain) {
+		struct device *pd;
+		static const char *cpr_genpd_names[] = { "cpr", "mx", NULL };
+
+		pd = dev_pm_domain_attach_by_name(&pdev->dev, "gx");
+		if (IS_ERR(pd)) {
+			return ERR_CAST(pd);
+		}
+
+		a5xx_gpu->gxpd = pd;
+
+		ret = devm_pm_opp_attach_genpd(&pdev->dev, cpr_genpd_names, NULL);
+		if (ret) {
+			dev_pm_domain_detach(a5xx_gpu->gxpd, true);
+			return ERR_PTR(ret);
+		}
+	}
 
 	check_speed_bin(&pdev->dev);
 
