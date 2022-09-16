@@ -708,8 +708,8 @@
 	vdd_gfx: s2@1700 {
 		reg = <0x1700 0x100>;
 		regulator-name = "VDD_GFX";
-		regulator-min-microvolt = <980000>;
-		regulator-max-microvolt = <980000>;
+		regulator-min-microvolt = <400000>;
+		regulator-max-microvolt = <1015000>;
 	};
 };
 
@@ -1111,4 +1111,9 @@
 	vdd-tx-supply = <&vreg_s4a_1p8>;
 	vdd-rx-supply = <&vreg_s4a_1p8>;
 	vdd-io-supply = <&vreg_s4a_1p8>;
+};
+
+&cpr3_gfx {
+	status = "okay";
+	vdd-supply = <&vdd_gfx>;
 };
