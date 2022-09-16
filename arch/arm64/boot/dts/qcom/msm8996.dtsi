@@ -685,6 +685,31 @@
 				reg = <0x133 0x1>;
 				bits = <5 3>;
 			};
+
+			cpr_fuse_revision: fuse-revn@13e {
+				reg = <0x13e 0x1>;
+				bits = <3 3>;
+			};
+
+			cpr_gfx_init_voltage3: gfx-init-voltage3@1fd{
+				reg = <0x1fd 0x1>;
+				bits = <0 5>;
+			};
+
+			cpr_gfx_init_voltage2: gfx-init-voltage2@1fd{
+				reg = <0x1fd 0x2>;
+				bits = <5 5>;
+			};
+
+			cpr_gfx_init_voltage1: gfx-init-voltage1@1fe{
+				reg = <0x1fe 0x1>;
+				bits = <2 5>;
+			};
+
+			cpr_gfx_init_voltage0: gfx-init-voltage0@1fe{
+				reg = <0x1fe 0x2>;
+				bits = <7 5>;
+			};
 		};
 
 		rng: rng@83000 {
@@ -836,6 +861,81 @@
 		tcsr: syscon@7a0000 {
 			compatible = "qcom,tcsr-msm8996", "syscon";
 			reg = <0x007a0000 0x18000>;
+		};
+
+		cpr3_gfx: power-controller@838000 {
+			compatible = "qcom,msm8996-gfx-cpr3", "qcom,cpr3";
+			reg = <0x00838000 0x4000>;
+			interrupts = <GIC_SPI 166 IRQ_TYPE_EDGE_RISING>;
+			clocks = <&mmcc MMSS_RBCPR_CLK>, <&mmcc MMSS_RBCPR_AHB_CLK>, <&mmcc MMSS_MMAGIC_AHB_CLK>;
+			clock-names = "ref", "iface", "bus";
+
+			acc-syscon = <&tcsr>;
+
+			#power-domain-cells = <1>;
+			operating-points-v2 = <&cpr3_gfx_opp_table>;
+
+			nvmem-cells = <&speedbin_efuse>,
+				      <&cpr_fuse_revision>,
+				      <&cpr_gfx_init_voltage0>,
+				      <&cpr_gfx_init_voltage1>,
+				      <&cpr_gfx_init_voltage2>,
+				      <&cpr_gfx_init_voltage3>;
+
+			nvmem-cell-names = "cpr_speed_bin",
+					   "cpr_fuse_revision",
+					   "cpr0_init_voltage1",
+					   "cpr0_init_voltage2",
+					   "cpr0_init_voltage3",
+					   "cpr0_init_voltage4";
+
+			status = "disabled";
+
+			cpr3_gfx_opp_table: opp-table-cpr3 {
+				compatible = "operating-points-v2-qcom-level";
+
+				cpr3_gfx_opp1: opp1 {
+					opp-level = <1>;
+					qcom,opp-fuse-level = <1>;
+					qcom,opp-cloop-vadj = <0>; /* 45000 for fusing_rev 0-1, 30000 for 2 */
+				};
+
+				cpr3_gfx_opp2: opp2 {
+					opp-level = <2>;
+					qcom,opp-fuse-level = <2>;
+					qcom,opp-cloop-vadj = <30000>; /* -5000 for fusing_rev 0-1, 60000 for 2 */
+				};
+
+				cpr3_gfx_opp3: opp3 {
+					opp-level = <3>;
+					qcom,opp-fuse-level = <2>;
+					qcom,opp-cloop-vadj = <10000>; /* 20000 for fusing_rev 0-1, 40000 for 2 */
+				};
+
+				cpr3_gfx_opp4: opp4 {
+					opp-level = <4>;
+					qcom,opp-fuse-level = <3>;
+					qcom,opp-cloop-vadj = <10000>; /* 20000 for fusing_rev 0-1, 40000 for 2 */
+				};
+
+				cpr3_gfx_opp5: opp5 {
+					opp-level = <5>;
+					qcom,opp-fuse-level = <3>;
+					qcom,opp-cloop-vadj = <45000>; /* 30000 for fusing_rev 0-1 */
+				};
+
+				cpr3_gfx_opp6: opp6 {
+					opp-level = <6>;
+					qcom,opp-fuse-level = <4>;
+					qcom,opp-cloop-vadj = <25000>; /* 10000 for fusing_rev 0-1 */
+				};
+
+				cpr3_gfx_opp7: opp7 {
+					opp-level = <7>;
+					qcom,opp-fuse-level = <4>;
+					qcom,opp-cloop-vadj = <25000>; /* -5000 for fusing_rev 0-1, 35000 for 2 */
+				};
+			};
 		};
 
 		mmcc: clock-controller@8c0000 {
