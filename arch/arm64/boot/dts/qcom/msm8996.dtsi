@@ -513,6 +513,10 @@
 					rpmpd_opp6: opp6 {
 						opp-level = <6>;
 					};
+
+					rpmpd_opp7: opp7 {
+						opp-level = <7>;
+					};
 				};
 			};
 		};
@@ -1192,7 +1196,8 @@
 			interconnects = <&bimc MASTER_GRAPHICS_3D &bimc SLAVE_EBI_CH0>;
 			interconnect-names = "gfx-mem";
 
-			power-domains = <&mmcc GPU_GX_GDSC>;
+			power-domains = <&mmcc GPU_GX_GDSC>, <&cpr3_gfx 0>, <&rpmpd MSM8996_VDDMX>;
+			power-domain-names = "gx", "cpr", "mx";
 			iommus = <&adreno_smmu 0>;
 
 			nvmem-cells = <&speedbin_efuse>;
@@ -1215,30 +1220,37 @@
 				opp-624000000 {
 					opp-hz = /bits/ 64 <624000000>;
 					opp-supported-hw = <0x09>;
+					required-opps = <&cpr3_gfx_opp7 &rpmpd_opp7>;
 				};
 				opp-560000000 {
 					opp-hz = /bits/ 64 <560000000>;
 					opp-supported-hw = <0x0d>;
+					required-opps = <&cpr3_gfx_opp6 &rpmpd_opp7>;
 				};
 				opp-510000000 {
 					opp-hz = /bits/ 64 <510000000>;
 					opp-supported-hw = <0xFF>;
+					required-opps = <&cpr3_gfx_opp5 &rpmpd_opp5>;
 				};
 				opp-401800000 {
 					opp-hz = /bits/ 64 <401800000>;
 					opp-supported-hw = <0xFF>;
+					required-opps = <&cpr3_gfx_opp4 &rpmpd_opp5>;
 				};
 				opp-315000000 {
 					opp-hz = /bits/ 64 <315000000>;
 					opp-supported-hw = <0xFF>;
+					required-opps = <&cpr3_gfx_opp3 &rpmpd_opp4>;
 				};
 				opp-214000000 {
 					opp-hz = /bits/ 64 <214000000>;
 					opp-supported-hw = <0xFF>;
+					required-opps = <&cpr3_gfx_opp2 &rpmpd_opp4>;
 				};
 				opp-133000000 {
 					opp-hz = /bits/ 64 <133000000>;
 					opp-supported-hw = <0xFF>;
+					required-opps = <&cpr3_gfx_opp1 &rpmpd_opp4>;
 				};
 			};
 
