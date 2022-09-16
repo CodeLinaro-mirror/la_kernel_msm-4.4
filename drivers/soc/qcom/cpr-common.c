@@ -117,14 +117,14 @@ const struct cpr_fuse *cpr_get_fuses(struct device *dev, int tid,
 }
 EXPORT_SYMBOL_GPL(cpr_get_fuses);
 
-int cpr_populate_fuse_common(struct device *dev,
-			     struct fuse_corner_data *fdata,
-			     const struct cpr_fuse *cpr_fuse,
-			     struct fuse_corner *fuse_corner,
-			     int step_volt, int init_v_width,
-			     int init_v_step)
+int cpr_read_fuse_common(struct device *dev,
+			 struct fuse_corner_data *fdata,
+			 const struct cpr_fuse *cpr_fuse,
+			 struct fuse_corner *fuse_corner,
+			 int step_volt, int init_v_width,
+			 int init_v_step)
 {
-	int uV, ret;
+	int uV;
 
 	/* Populate uV */
 	uV = cpr_read_fuse_uV(init_v_width, init_v_step,
@@ -145,6 +145,24 @@ int cpr_populate_fuse_common(struct device *dev,
 	fuse_corner->max_uV = fdata->max_uV;
 	fuse_corner->uV = clamp(uV, fuse_corner->min_uV, fuse_corner->max_uV);
 
+	return 0;
+}
+EXPORT_SYMBOL_GPL(cpr_read_fuse_common);
+
+int cpr_populate_fuse_common(struct device *dev,
+			     struct fuse_corner_data *fdata,
+			     const struct cpr_fuse *cpr_fuse,
+			     struct fuse_corner *fuse_corner,
+			     int step_volt, int init_v_width,
+			     int init_v_step)
+{
+	int ret;
+
+	ret = cpr_read_fuse_common(dev, fdata, cpr_fuse, fuse_corner,
+				   step_volt, init_v_width, init_v_step);
+	if (ret < 0)
+		return ret;
+
 	/* Populate target quotient by scaling */
 	ret = nvmem_cell_read_variable_le_u32(dev, cpr_fuse->quotient, &fuse_corner->quot);
 	if (ret)
@@ -157,57 +175,6 @@ int cpr_populate_fuse_common(struct device *dev,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(cpr_populate_fuse_common);
-
-/*
- * Returns: Index of the initial corner or negative number for error.
- */
-int cpr_find_initial_corner(struct device *dev, struct clk *cpu_clk,
-			    struct corner *corners, int num_corners)
-{
-	unsigned long rate;
-	struct corner *iter, *corner;
-	const struct corner *end;
-	unsigned int ret = 0;
-
-	if (!cpu_clk)
-		return -EINVAL;
-
-	end = &corners[num_corners - 1];
-	rate = clk_get_rate(cpu_clk);
-
-	/*
-	 * Some bootloaders set a CPU clock frequency that is not defined
-	 * in the OPP table. When running at an unlisted frequency,
-	 * cpufreq_online() will change to the OPP which has the lowest
-	 * frequency, at or above the unlisted frequency.
-	 * Since cpufreq_online() always "rounds up" in the case of an
-	 * unlisted frequency, this function always "rounds down" in case
-	 * of an unlisted frequency. That way, when cpufreq_online()
-	 * triggers the first ever call to cpr_set_performance_state(),
-	 * it will correctly determine the direction as UP.
-	 */
-	for (iter = corners; iter <= end; iter++) {
-		if (iter->freq > rate)
-			break;
-		ret++;
-		if (iter->freq == rate) {
-			corner = iter;
-			break;
-		}
-		if (iter->freq < rate)
-			corner = iter;
-	}
-
-	if (!corner) {
-		dev_err(dev, "boot up corner not found\n");
-		return -EINVAL;
-	}
-
-	dev_dbg(dev, "boot up perf state: %u\n", ret);
-
-	return ret;
-}
-EXPORT_SYMBOL_GPL(cpr_find_initial_corner);
 
 u32 cpr_get_fuse_corner(struct dev_pm_opp *opp, u32 tid)
 {
@@ -286,15 +253,35 @@ out_ref:
 }
 EXPORT_SYMBOL_GPL(cpr_get_opp_hz_for_req);
 
+int cpr_calculate_scaling_raw(u32 quot_diff,
+			      struct device *dev,
+			      const struct fuse_corner_data *fdata,
+			      const struct corner *corner)
+{
+	u64 freq_diff;
+	const struct fuse_corner *fuse, *prev_fuse;
+	int scaling;
+
+	fuse = corner->fuse_corner;
+	prev_fuse = fuse - 1;
+
+	freq_diff = fuse->max_freq - prev_fuse->max_freq;
+	freq_diff = div_u64(freq_diff, 1000000); /* Convert to MHz */
+	scaling = 1000 * quot_diff;
+	do_div(scaling, freq_diff);
+
+	return scaling;
+}
+EXPORT_SYMBOL_GPL(cpr_calculate_scaling_raw);
+
 int cpr_calculate_scaling(const char *quot_offset,
 			  struct device *dev,
 			  const struct fuse_corner_data *fdata,
 			  const struct corner *corner)
 {
-	u64 freq_diff;
 	const struct fuse_corner *fuse, *prev_fuse;
 	u32 quot_diff;
-	int scaling, ret;
+	int ret;
 
 	fuse = corner->fuse_corner;
 	prev_fuse = fuse - 1;
@@ -310,11 +297,7 @@ int cpr_calculate_scaling(const char *quot_offset,
 		quot_diff = fuse->quot - prev_fuse->quot;
 	}
 
-	freq_diff = fuse->max_freq - prev_fuse->max_freq;
-	freq_diff = div_u64(freq_diff, 1000000); /* Convert to MHz */
-	scaling = 1000 * quot_diff;
-	do_div(scaling, freq_diff);
-	return min(scaling, fdata->max_quot_scale);
+	return cpr_calculate_scaling_raw(quot_diff, dev, fdata, corner);
 }
 EXPORT_SYMBOL_GPL(cpr_calculate_scaling);
 

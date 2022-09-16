@@ -194,6 +194,13 @@ enum cpr_type {
 	CTRL_TYPE_MAX,
 };
 
+struct cpr_corner {
+	struct corner corner;
+	int last_uV;
+	int quot_adjust;
+	bool is_open_loop;
+};
+
 /*
  * struct cpr_thread_desc - CPR Thread-specific parameters
  *
@@ -295,8 +302,8 @@ struct cpr_thread {
 	bool			enabled;
 	void __iomem		*base;
 	struct clk		*cpu_clk;
-	struct corner		*corner;
-	struct corner		*corners;
+	struct cpr_corner	*corner;
+	struct cpr_corner	*corners;
 	struct fuse_corner	*fuse_corners;
 	struct cpr_drv		*drv;
 	struct cpr_ext_data	ext_data;
@@ -526,10 +533,10 @@ static void cpr_restart_worker(struct work_struct *work)
  * @corner: Structure holding the saved corner level
  */
 static void cpr_corner_restore(struct cpr_thread *thread,
-			       struct corner *corner)
+			       struct cpr_corner *corner)
 {
 	struct cpr_drv *drv = thread->drv;
-	struct fuse_corner *fuse = corner->fuse_corner;
+	struct fuse_corner *fuse = corner->corner.fuse_corner;
 	const struct cpr_thread_desc *tdesc = thread->desc;
 	u32 ro_sel = fuse->ring_osc_idx;
 
@@ -549,7 +556,7 @@ static void cpr_corner_restore(struct cpr_thread *thread,
 	}
 
 	thread->corner = corner;
-	corner->last_uV = corner->uV;
+	corner->last_uV = corner->corner.uV;
 }
 
 /**
@@ -643,11 +650,11 @@ static int cpr_commit_state(struct cpr_thread *thread)
 			continue;
 
 		fuse_level = max(fuse_level,
-				 (int) (thread->corner->fuse_corner -
+				 (int) (thread->corner->corner.fuse_corner -
 				 &thread->fuse_corners[0]));
 
-		max_uV = max(max_uV, thread->corner->max_uV);
-		min_uV = max(min_uV, thread->corner->min_uV);
+		max_uV = max(max_uV, thread->corner->corner.max_uV);
+		min_uV = max(min_uV, thread->corner->corner.min_uV);
 		new_uV = max(new_uV, thread->corner->last_uV);
 	}
 	dev_vdbg(drv->dev, "%s: new uV: %d, last uV: %d\n",
@@ -720,7 +727,7 @@ static void cpr_scale(struct cpr_thread *thread, enum voltage_change_dir dir)
 	const struct cpr_thread_desc *tdesc = thread->desc;
 	u32 val, error_steps;
 	int last_uV, new_uV;
-	struct corner *corner;
+	struct cpr_corner *corner;
 
 	if (dir != UP && dir != DOWN)
 		return;
@@ -738,7 +745,7 @@ static void cpr_scale(struct cpr_thread *thread, enum voltage_change_dir dir)
 
 		/* Calculate new voltage */
 		new_uV = last_uV + drv->vreg_step;
-		new_uV = min(new_uV, corner->max_uV);
+		new_uV = min(new_uV, corner->corner.max_uV);
 
 		dev_vdbg(drv->dev, "[T%u] UP - new_uV=%d last_uV=%d p-state=%u st=%u\n",
 			thread->id, new_uV, last_uV,
@@ -749,7 +756,7 @@ static void cpr_scale(struct cpr_thread *thread, enum voltage_change_dir dir)
 
 		/* Calculate new voltage */
 		new_uV = last_uV - drv->vreg_step;
-		new_uV = max(new_uV, corner->min_uV);
+		new_uV = max(new_uV, corner->corner.min_uV);
 		dev_vdbg(drv->dev, "[T%u] DOWN - new_uV=%d last_uV=%d p-state=%u st=%u\n",
 			thread->id, new_uV, last_uV,
 			cpr_get_cur_perf_state(thread), error_steps);
@@ -1097,7 +1104,7 @@ static int cpr_set_performance_state(struct generic_pm_domain *domain,
 {
 	struct cpr_thread *thread = container_of(domain, struct cpr_thread, pd);
 	struct cpr_drv *drv = thread->drv;
-	struct corner *corner, *end;
+	struct cpr_corner *corner, *end;
 	int ret = 0;
 
 	mutex_lock(&drv->lock);
@@ -1227,18 +1234,18 @@ skip_pvs_restrict:
 	return 0;
 }
 
-static void cpr3_restrict_corner(struct corner *corner, int threshold,
+static void cpr3_restrict_corner(struct cpr_corner *corner, int threshold,
 				 int hysteresis, int step)
 {
-	if (threshold > corner->min_uV && threshold <= corner->max_uV) {
-		if (corner->uV >= threshold) {
-			corner->min_uV = max(corner->min_uV,
+	if (threshold > corner->corner.min_uV && threshold <= corner->corner.max_uV) {
+		if (corner->corner.uV >= threshold) {
+			corner->corner.min_uV = max(corner->corner.min_uV,
 					     threshold - hysteresis);
-			if (corner->min_uV > corner->uV)
-				corner->uV = corner->min_uV;
+			if (corner->corner.min_uV > corner->corner.uV)
+				corner->corner.uV = corner->corner.min_uV;
 		} else {
-			corner->max_uV = threshold;
-			corner->max_uV -= step;
+			corner->corner.max_uV = threshold;
+			corner->corner.max_uV -= step;
 		}
 	}
 }
@@ -1257,21 +1264,21 @@ static void cpr3_restrict_corner(struct corner *corner, int threshold,
  */
 static int cprh_corner_adjust_opps(struct cpr_thread *thread)
 {
-	struct corner *corner = thread->corners;
+	struct cpr_corner *corner = thread->corners;
 	struct cpr_drv *drv = thread->drv;
 	int i, ret;
 
 	for (i = 0; i < thread->num_corners; i++) {
 		ret = dev_pm_opp_adjust_voltage(thread->attached_cpu_dev,
-						corner[i].freq,
-						corner[i].uV,
-						corner[i].min_uV,
-						corner[i].max_uV);
+						corner[i].corner.freq,
+						corner[i].corner.uV,
+						corner[i].corner.min_uV,
+						corner[i].corner.max_uV);
 		if (ret)
 			break;
 
 		dev_dbg(drv->dev, "OPP voltage adjusted for %lu kHz, %d uV\n",
-			corner[i].freq, corner[i].uV);
+			corner[i].corner.freq, corner[i].corner.uV);
 	}
 
 	/* If we couldn't adjust voltage for all corners, something went wrong */
@@ -1309,7 +1316,7 @@ static int cpr3_corner_init(struct cpr_thread *thread)
 	const char *quot_offset;
 	const struct fuse_corner_data *fdata;
 	struct fuse_corner *fuse, *prev_fuse;
-	struct corner *corner, *prev_corner, *end;
+	struct cpr_corner *corner, *prev_corner, *end;
 	struct corner_data *cdata;
 	struct dev_pm_opp *opp;
 	unsigned long freq;
@@ -1438,20 +1445,21 @@ static int cpr3_corner_init(struct cpr_thread *thread)
 		else
 			prev_fuse = NULL;
 
-		corner->fuse_corner = fuse;
-		corner->freq = cdata[i].freq;
-		corner->uV = fuse->uV;
+		corner->corner.fuse_corner = fuse;
+		corner->corner.freq = cdata[i].freq;
+		corner->corner.uV = fuse->uV;
 
 		if (prev_fuse) {
 			if (prev_fuse->ring_osc_idx == fuse->ring_osc_idx)
 				quot_offset = NULL;
 
 			scaling = cpr_calculate_scaling(quot_offset, drv->dev,
-							fdata, corner);
-			if (scaling < 0)
+							fdata, &corner->corner);
+			if (scaling < 0) {
+				dev_warn(drv->dev, "Error calculating scaling: %d\n", scaling);
 				return scaling;
 
-			freq_diff_mhz = fuse->max_freq - corner->freq;
+			freq_diff_mhz = fuse->max_freq - corner->corner.freq;
 			do_div(freq_diff_mhz, 1000000); /* now in MHz */
 
 			corner->quot_adjust = scaling * freq_diff_mhz;
@@ -1468,17 +1476,17 @@ static int cpr3_corner_init(struct cpr_thread *thread)
 			 * Make sure that we scale (up) monotonically.
 			 * P.S.: Fuse quots can never be descending.
 			 */
-			prev_quot = prev_corner->fuse_corner->quot;
+			prev_quot = prev_corner->corner.fuse_corner->quot;
 			prev_quot -= prev_corner->quot_adjust;
 			if (fuse->quot - corner->quot_adjust < prev_quot) {
-				int new_adj = prev_corner->fuse_corner->quot;
+				int new_adj = prev_corner->corner.fuse_corner->quot;
 				new_adj -= fuse->quot;
 				dev_vdbg(drv->dev, "Monotonic increase forced: %d->%d\n",
 					 corner->quot_adjust, new_adj);
 				corner->quot_adjust = new_adj;
 			}
 
-			corner->uV = cpr_interpolate(corner,
+			corner->corner.uV = cpr_interpolate(&corner->corner,
 						     drv->vreg_step, fdata);
 		}
 		/* Negative fuse quotients are nonsense. */
@@ -1489,31 +1497,35 @@ static int cpr3_corner_init(struct cpr_thread *thread)
 				   (u32)(fuse->quot - corner->quot_adjust));
 
 		/* Fine-tune voltages (open-loop) based on fixed values */
-		corner->uV += cdata[i].oloop_vadj;
+		corner->corner.uV += cdata[i].oloop_vadj;
 		dev_dbg(drv->dev, "Voltage fine-tuning to %d for post-vadj=%d\n",
-			 corner->uV, cdata[i].oloop_vadj);
+			 corner->corner.uV, cdata[i].oloop_vadj);
 
-		corner->max_uV = fuse->max_uV;
-		corner->min_uV = fuse->min_uV;
-		corner->uV = clamp(corner->uV, corner->min_uV, corner->max_uV);
+		corner->corner.max_uV = fuse->max_uV;
+		corner->corner.min_uV = fuse->min_uV;
+		corner->corner.uV = clamp(corner->corner.uV, corner->corner.min_uV, corner->corner.max_uV);
 		dev_vdbg(drv->dev, "Clamped after interpolation: [%d %d %d]\n",
-			corner->min_uV, corner->uV, corner->max_uV);
+			corner->corner.min_uV, corner->corner.uV, corner->corner.max_uV);
 
 		/* Make sure that we scale monotonically here, too. */
-		if (corner->uV < prev_corner->uV)
-			corner->uV = prev_corner->uV;
+		if (corner->corner.uV < prev_corner->corner.uV)
+			corner->corner.uV = prev_corner->corner.uV;
 
-		corner->last_uV = corner->uV;
+		corner->last_uV = corner->corner.uV;
 
 		/* Reduce the ceiling voltage if needed */
-		if (desc->reduce_to_corner_uV && corner->uV < corner->max_uV)
-			corner->max_uV = corner->uV;
-		else if (desc->reduce_to_fuse_uV && fuse->uV < corner->max_uV)
-			corner->max_uV = max(corner->min_uV, fuse->uV);
+		if (desc->reduce_to_corner_uV && corner->corner.uV < corner->corner.max_uV)
+			corner->corner.max_uV = corner->corner.uV;
+		else if (desc->reduce_to_fuse_uV && fuse->uV < corner->corner.max_uV)
+			corner->corner.max_uV = max(corner->corner.min_uV, fuse->uV);
+		dev_vdbg(drv->dev, "Clamped after interpolation: [%d %d %d]\n",
+			corner->corner.min_uV, corner->corner.uV, corner->corner.max_uV);
 
-		corner->min_uV = max(corner->max_uV - fdata->range_uV,
-				     corner->min_uV);
+		corner->corner.min_uV = max(corner->corner.max_uV - fdata->range_uV,
+				     corner->corner.min_uV);
 
+		dev_vdbg(drv->dev, "Clamped after interpolation: [%d %d %d (%d)]\n",
+			corner->corner.min_uV, corner->corner.uV, corner->corner.max_uV, fdata->range_uV);
 		/*
 		 * Adjust per-corner floor and ceiling voltages so that
 		 * they do not overlap the memory Array Power Mux (APM)
@@ -1529,7 +1541,7 @@ static int cpr3_corner_init(struct cpr_thread *thread)
 
 		prev_corner = corner;
 		dev_dbg(drv->dev, "corner %d: [%d %d %d] scaling %d quot %d\n", i,
-			corner->min_uV, corner->uV, corner->max_uV, scaling,
+			corner->corner.min_uV, corner->corner.uV, corner->corner.max_uV, scaling,
 			fuse->quot - corner->quot_adjust);
 	}
 
@@ -1550,9 +1562,9 @@ static int cpr3_corner_init(struct cpr_thread *thread)
 	/* If the APM extra corner exists, add it now. */
 	if (desc->apm_crossover && desc->apm_threshold && extra_corners) {
 		/* Program the APM crossover corner on the CPR-Hardened */
-		thread->corners[total_corners].uV = desc->apm_crossover;
-		thread->corners[total_corners].min_uV = desc->apm_crossover;
-		thread->corners[total_corners].max_uV = desc->apm_crossover;
+		thread->corners[total_corners].corner.uV = desc->apm_crossover;
+		thread->corners[total_corners].corner.min_uV = desc->apm_crossover;
+		thread->corners[total_corners].corner.max_uV = desc->apm_crossover;
 		thread->corners[total_corners].is_open_loop = true;
 
 		/*
@@ -1572,9 +1584,9 @@ static int cpr3_corner_init(struct cpr_thread *thread)
 
 	if (desc->mem_acc_threshold && extra_corners) {
 		/* Program the Memory Accelerator threshold corner to CPRh */
-		thread->corners[total_corners].uV = desc->mem_acc_threshold;
-		thread->corners[total_corners].min_uV = desc->mem_acc_threshold;
-		thread->corners[total_corners].max_uV = desc->mem_acc_threshold;
+		thread->corners[total_corners].corner.uV = desc->mem_acc_threshold;
+		thread->corners[total_corners].corner.min_uV = desc->mem_acc_threshold;
+		thread->corners[total_corners].corner.max_uV = desc->mem_acc_threshold;
 		thread->corners[total_corners].is_open_loop = true;
 
 		/*
@@ -1647,10 +1659,10 @@ static int cpr3_corner_init(struct cpr_thread *thread)
 		fnum = cdata[i].fuse_corner;
 		fuse = &thread->fuse_corners[fnum];
 
-		val = thread->corners[i].uV - desc->cpr_base_voltage;
+		val = thread->corners[i].corner.uV - desc->cpr_base_voltage;
 		volt_oloop_steps = DIV_ROUND_UP(val, drv->vreg_step);
 
-		val = thread->corners[i].min_uV - desc->cpr_base_voltage;
+		val = thread->corners[i].corner.min_uV - desc->cpr_base_voltage;
 		volt_floor_steps = DIV_ROUND_UP(val, drv->vreg_step);
 
 		/*
@@ -1801,6 +1813,56 @@ static int cpr3_init_parameters(struct cpr_drv *drv)
 	return 0;
 }
 
+/*
+ * Returns: Index of the initial corner or negative number for error.
+ */
+static int cpr_find_initial_corner(struct device *dev, struct clk *cpu_clk,
+			    struct cpr_corner *corners, int num_corners)
+{
+	unsigned long rate;
+	struct cpr_corner *iter, *corner;
+	const struct cpr_corner *end;
+	unsigned int ret = 0;
+
+	if (!cpu_clk)
+		return -EINVAL;
+
+	end = &corners[num_corners - 1];
+	rate = clk_get_rate(cpu_clk);
+
+	/*
+	 * Some bootloaders set a CPU clock frequency that is not defined
+	 * in the OPP table. When running at an unlisted frequency,
+	 * cpufreq_online() will change to the OPP which has the lowest
+	 * frequency, at or above the unlisted frequency.
+	 * Since cpufreq_online() always "rounds up" in the case of an
+	 * unlisted frequency, this function always "rounds down" in case
+	 * of an unlisted frequency. That way, when cpufreq_online()
+	 * triggers the first ever call to cpr_set_performance_state(),
+	 * it will correctly determine the direction as UP.
+	 */
+	for (iter = corners; iter <= end; iter++) {
+		if (iter->corner.freq > rate)
+			break;
+		ret++;
+		if (iter->corner.freq == rate) {
+			corner = iter;
+			break;
+		}
+		if (iter->corner.freq < rate)
+			corner = iter;
+	}
+
+	if (!corner) {
+		dev_err(dev, "boot up corner not found\n");
+		return -EINVAL;
+	}
+
+	dev_dbg(dev, "boot up perf state: %u\n", ret);
+
+	return ret;
+}
+
 /**
  * cpr3_find_initial_corner() - Finds boot-up p-state and enables CPR
  * @thread: Structure holding CPR thread-specific parameters
@@ -1816,7 +1878,7 @@ static int cpr3_init_parameters(struct cpr_drv *drv)
 static int cpr3_find_initial_corner(struct cpr_thread *thread)
 {
 	struct cpr_drv *drv = thread->drv;
-	struct corner *corner;
+	struct cpr_corner *corner;
 	int uV, idx;
 
 	idx = cpr_find_initial_corner(drv->dev, thread->cpu_clk,
@@ -1831,7 +1893,7 @@ static int cpr3_find_initial_corner(struct cpr_thread *thread)
 	cpr_corner_restore(thread, corner);
 
 	uV = regulator_get_voltage(drv->vreg);
-	uV = clamp(uV, corner->min_uV, corner->max_uV);
+	uV = clamp(uV, corner->corner.min_uV, corner->corner.max_uV);
 
 	corner->last_uV = uV;
 	if (!drv->last_uV)
@@ -2465,7 +2527,7 @@ static int cpr3_debug_info_show(struct seq_file *s, void *unused)
 {
 	u32 ro_sel, ctl, irq_status, reg, quot;
 	struct cpr_thread *thread = s->private;
-	struct corner *corner = thread->corners;
+	struct cpr_corner *corner = thread->corners;
 	struct fuse_corner *fuse = thread->fuse_corners;
 	unsigned int i;
 
@@ -2517,19 +2579,21 @@ static int cpr3_debug_info_show(struct seq_file *s, void *unused)
 
 	for (i = 0; i < thread->num_corners; i++, corner++)
 		seq_printf(s, "corner %d - uV=[%d %d %d] quot=%d freq=%lu\n",
-			   i, corner->min_uV, corner->uV, corner->max_uV,
-			   corner->quot_adjust, corner->freq);
+			   i, corner->corner.min_uV, corner->corner.uV, corner->corner.max_uV,
+			   corner->quot_adjust, corner->corner.freq);
 
 	for (i = 0; i < thread->desc->num_fuse_corners; i++, fuse++)
 		seq_printf(s, "fuse %d - uV=[%d %d %d] quot=%d freq=%lu\n",
 			   i, fuse->min_uV, fuse->uV, fuse->max_uV,
-			   fuse->quot, corner->freq);
+			   fuse->quot, corner ? corner->corner.freq : 0UL);
 
 	seq_printf(s, "requested voltage: %d uV\n", thread->corner->last_uV);
 
-	ro_sel = corner->fuse_corner->ring_osc_idx;
-	quot = cpr_read(thread, CPR3_REG_TARGET_QUOT(i, ro_sel));
-	seq_printf(s, "quot_target (%u) = %#02X\n", ro_sel, quot);
+	if (corner && corner->corner.fuse_corner) {
+		ro_sel = corner->corner.fuse_corner->ring_osc_idx;
+		quot = cpr_read(thread, CPR3_REG_TARGET_QUOT(i, ro_sel));
+		seq_printf(s, "quot_target (%u) = %#02X\n", ro_sel, quot);
+	}
 
 	reg = cpr_read(thread, CPR3_REG_RESULT0(i));
 	seq_printf(s, "cpr_result_0 = %#02X\n  [", reg);
@@ -2814,9 +2878,13 @@ static int cpr_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
+	dev_dbg(dev, "Fusing revision %d\n", drv->fusing_rev);
+
 	ret = nvmem_cell_read_variable_le_u32(dev, "cpr_speed_bin", &drv->speed_bin);
 	if (ret)
 		return ret;
+
+	dev_dbg(dev, "Speed bin %d\n", drv->speed_bin);
 
 	/*
 	 * Some SoCs require extra corners for MEM-ACC or APM: if

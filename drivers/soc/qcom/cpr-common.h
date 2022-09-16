@@ -53,12 +53,7 @@ struct corner {
 	int min_uV;
 	int max_uV;
 	int uV;
-	int last_uV;
-	int quot_adjust;
-	u32 save_ctl;
-	u32 save_irq;
 	unsigned long freq;
-	bool is_open_loop;
 	struct fuse_corner *fuse_corner;
 };
 
@@ -92,19 +87,27 @@ int cpr_read_fuse_uV(int init_v_width, int step_size_uV, int ref_uV,
 		     struct device *dev);
 const struct cpr_fuse *cpr_get_fuses(struct device *dev, int tid,
 				     int num_fuse_corners);
+int cpr_read_fuse_common(struct device *dev,
+			 struct fuse_corner_data *fdata,
+			 const struct cpr_fuse *cpr_fuse,
+			 struct fuse_corner *fuse_corner,
+			 int step_volt, int init_v_width,
+			 int init_v_step);
 int cpr_populate_fuse_common(struct device *dev,
 			     struct fuse_corner_data *fdata,
 			     const struct cpr_fuse *cpr_fuse,
 			     struct fuse_corner *fuse_corner,
 			     int step_volt, int init_v_width,
 			     int init_v_step);
-int cpr_find_initial_corner(struct device *dev, struct clk *cpu_clk,
-			    struct corner *corners, int num_corners);
 u32 cpr_get_fuse_corner(struct dev_pm_opp *opp, u32 tid);
 void cpr_get_corner_post_vadj(struct dev_pm_opp *opp, u32 tid,
 			      s32 *open_loop, s32 *closed_loop);
 unsigned long cpr_get_opp_hz_for_req(struct dev_pm_opp *ref,
 				     struct device *cpu_dev);
+int cpr_calculate_scaling_raw(u32 quot_diff,
+			      struct device *dev,
+			      const struct fuse_corner_data *fdata,
+			      const struct corner *corner);
 int cpr_calculate_scaling(const char *quot_offset,
 			  struct device *dev,
 			  const struct fuse_corner_data *fdata,

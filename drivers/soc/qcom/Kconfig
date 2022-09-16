@@ -26,11 +26,15 @@ config QCOM_COMMAND_DB
 	  resource on a RPM-hardened platform must use this database to get
 	  SoC specific identifier and information for the shared resources.
 
+config QCOM_CPR_COMMON
+	tristate
+
 config QCOM_CPR
 	tristate "QCOM Core Power Reduction (CPR) support"
 	depends on ARCH_QCOM && HAS_IOMEM
 	select PM_OPP
 	select REGMAP
+	select QCOM_CPR_COMMON
 	help
 	  Say Y here to enable support for the CPR hardware found on Qualcomm
 	  SoCs like QCS404.
@@ -47,6 +51,7 @@ config QCOM_CPR3
 	depends on ARCH_QCOM && HAS_IOMEM
 	select PM_OPP
 	select REGMAP
+	select QCOM_CPR_COMMON
 	help
 	  Say Y here to enable support for the CPR hardware found on a broad
 	  variety of Qualcomm SoCs like MSM8996, MSM8998, SDM630, SDM660,
@@ -54,7 +59,7 @@ config QCOM_CPR3
 
 	  This driver populates OPP tables and makes adjustments to them
 	  based on feedback from the CPR hardware. If you want to do CPU
-	  and/or GPU frequency scaling say Y here.
+	  frequency scaling say Y here.
 
 	  To compile this driver as a module, choose M here: the module will
 	  be called qcom-cpr3
