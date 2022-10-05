@@ -16,6 +16,7 @@
 #include <linux/of_device.h>
 #include <linux/err.h>
 #include <linux/platform_device.h>
+#include <linux/regulator/driver.h>
 #include <soc/qcom/spm.h>
 
 #define SPM_CTL_INDEX		0x7f
@@ -29,12 +30,15 @@ enum spm_reg {
 	SPM_REG_PMIC_DLY,
 	SPM_REG_PMIC_DATA_0,
 	SPM_REG_PMIC_DATA_1,
+	SPM_REG_PMIC_DATA_2,
+	SPM_REG_PMIC_DATA_3,
 	SPM_REG_VCTL,
 	SPM_REG_SEQ_ENTRY,
 	SPM_REG_SPM_STS,
 	SPM_REG_PMIC_STS,
 	SPM_REG_AVS_CTL,
 	SPM_REG_AVS_LIMIT,
+	SPM_REG_RST,
 	SPM_REG_NR,
 };
 
@@ -69,8 +73,13 @@ static const struct spm_reg_data spm_reg_8998_silver_l2  = {
 
 static const u16 spm_reg_offset_v3_0[SPM_REG_NR] = {
 	[SPM_REG_CFG]		= 0x08,
+	[SPM_REG_PMIC_STS]	= 0x14,
+	[SPM_REG_RST]		= 0x18,
+	[SPM_REG_VCTL]		= 0x1c,
+	[SPM_REG_AVS_CTL]	= 0x20,
 	[SPM_REG_SPM_CTL]	= 0x30,
 	[SPM_REG_DLY]		= 0x34,
+	[SPM_REG_PMIC_DATA_3]	= 0x4c,
 	[SPM_REG_SEQ_ENTRY]	= 0x400,
 };
 
@@ -89,6 +98,7 @@ static const struct spm_reg_data spm_reg_8916_cpu = {
 static const struct spm_reg_data spm_reg_8996_cbf  = {
 	.reg_offset = spm_reg_offset_v3_0,
 	.avs_ctl = 0x1100,
+	.has_regulator = true,
 };
 
 static const u16 spm_reg_offset_v2_1[SPM_REG_NR] = {
@@ -193,6 +203,130 @@ void spm_set_low_power_mode(struct spm_driver_data *drv,
 	spm_register_write_sync(drv, SPM_REG_SPM_CTL, ctl_val);
 }
 
+#define SAW3_VCTL_DATA_MASK	0xFF
+#define SAW3_VCTL_CLEAR_MASK	0x700FF
+#define SAW3_AVS_CTL_EN_MASK	0x1
+#define SAW3_AVS_CTL_TGGL_MASK	0x8000000
+#define SAW3_AVS_CTL_CLEAR_MASK	0x7efc00
+
+static void spmi_saw_set_vdd(void *data)
+{
+	struct spm_driver_data *drv = data;
+	u32 vctl, data3, avs_ctl, pmic_sts;
+	bool avs_enabled = false;
+	unsigned long timeout;
+	u32 voltage_sel = drv->volt_sel;
+
+	avs_ctl = spm_register_read(drv, SPM_REG_AVS_CTL);
+	vctl = spm_register_read(drv, SPM_REG_VCTL);
+	data3 = spm_register_read(drv, SPM_REG_PMIC_DATA_3);
+
+	/* select the band */
+	vctl &= ~SAW3_VCTL_CLEAR_MASK;
+	vctl |= voltage_sel;
+
+	data3 &= ~SAW3_VCTL_CLEAR_MASK;
+	data3 |= voltage_sel;
+
+	/* If AVS is enabled, switch it off during the voltage change */
+	avs_enabled = SAW3_AVS_CTL_EN_MASK & avs_ctl;
+	if (avs_enabled) {
+		avs_ctl &= ~SAW3_AVS_CTL_TGGL_MASK;
+		spm_register_write(drv, SPM_REG_AVS_CTL, avs_ctl);
+	}
+
+	/* Kick the state machine back to idle */
+	spm_register_write(drv, SPM_REG_RST, 1);
+	spm_register_write(drv, SPM_REG_VCTL, vctl);
+	spm_register_write(drv, SPM_REG_PMIC_DATA_3, data3);
+
+	timeout = jiffies + usecs_to_jiffies(100);
+	do {
+		pmic_sts = spm_register_read(drv, SPM_REG_PMIC_STS);
+		pmic_sts &= SAW3_VCTL_DATA_MASK;
+		if (pmic_sts == voltage_sel)
+			break;
+
+		cpu_relax();
+
+	} while (time_before(jiffies, timeout));
+
+	/* After successful voltage change, switch the AVS back on */
+	if (avs_enabled) {
+		pmic_sts &= 0x3f;
+		avs_ctl &= ~SAW3_AVS_CTL_CLEAR_MASK;
+		avs_ctl |= ((pmic_sts - 4) << 10);
+		avs_ctl |= (pmic_sts << 17);
+		avs_ctl |= SAW3_AVS_CTL_TGGL_MASK;
+		spm_register_write(drv, SPM_REG_AVS_CTL, avs_ctl);
+	}
+}
+
+static int spm_avs_set_voltage_sel(struct regulator_dev *rdev, unsigned int selector)
+{
+	struct spm_driver_data *drv = rdev_get_drvdata(rdev);
+
+	drv->volt_sel = selector;
+
+	/* Always do the SAW register writes on the first CPU */
+	return smp_call_function_single(0, spmi_saw_set_vdd, drv, true);
+}
+
+static int spm_avs_get_voltage_sel(struct regulator_dev *rdev)
+{
+	struct spm_driver_data *drv = rdev_get_drvdata(rdev);
+
+	return spm_register_read(drv, SPM_REG_PMIC_STS) & 0xff;
+}
+
+static const struct regulator_ops spm_avs_ops = {
+	.set_voltage_sel	= spm_avs_set_voltage_sel,
+	.get_voltage_sel	= spm_avs_get_voltage_sel,
+	.list_voltage		= regulator_list_voltage_linear,
+	.map_voltage		= regulator_map_voltage_linear,
+};
+
+static const struct regulator_desc spm_regulator = {
+	.name = "spm",
+	.of_match = of_match_ptr("spm"),
+	.id = 0,
+	.type = REGULATOR_VOLTAGE,
+	.owner = THIS_MODULE,
+	.ops = &spm_avs_ops,
+	.n_voltages = 256,
+
+	/* FIXME: these are applicable to msm8996 only */
+	.min_uV = 80000 + 54 * 5000,
+	.uV_step = 5000,
+	.linear_min_sel = 54,
+};
+
+static int spm_avs_register_regulator(struct device *dev, struct spm_driver_data *drv)
+{
+	struct regulator_config config = {
+		.dev = dev,
+		.driver_data = drv,
+	};
+	struct regulator_dev *rdev;
+
+	/* Program initial voltage, high enough, otherwise PMIC_STS returns 0 */
+	/* FIXME: this should come from platform data */
+	drv->volt_sel = DIV_ROUND_UP(980000 - spm_regulator.min_uV, spm_regulator.uV_step) + spm_regulator.linear_min_sel;
+
+	/* Always do the SAW register writes on the first CPU */
+	smp_call_function_single(0, spmi_saw_set_vdd, drv, true);
+
+	rdev = devm_regulator_register(dev,
+				       &spm_regulator,
+				       &config);
+	if (IS_ERR(rdev)) {
+		dev_err(dev, "failed to register regulator\n");
+		return PTR_ERR(rdev);
+	}
+
+	return 0;
+}
+
 static const struct of_device_id spm_match_table[] = {
 	{ .compatible = "qcom,sdm660-gold-saw2-v4.1-l2",
 	  .data = &spm_reg_660_gold_l2 },
@@ -266,7 +400,10 @@ static int spm_dev_probe(struct platform_device *pdev)
 	if (drv->reg_data->reg_offset[SPM_REG_SPM_CTL])
 		spm_set_low_power_mode(drv, PM_SLEEP_MODE_STBY);
 
-	return 0;
+	if (!drv->reg_data->has_regulator)
+		return 0;
+
+	return spm_avs_register_regulator(&pdev->dev, drv);
 }
 
 static struct platform_driver spm_driver = {
