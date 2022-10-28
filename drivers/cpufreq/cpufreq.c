@@ -1469,8 +1469,8 @@ static int cpufreq_online(unsigned int cpu)
 		/* Are we running at unknown frequency ? */
 		ret = cpufreq_frequency_table_get_index(policy, old_freq);
 		if (ret == -EINVAL) {
-			ret = __cpufreq_driver_target(policy, old_freq - 1,
-						      CPUFREQ_RELATION_L);
+			ret = __cpufreq_driver_target(policy, old_freq,
+						      CPUFREQ_RELATION_H);
 
 			/*
 			 * Reaching here after boot in a few seconds may not
