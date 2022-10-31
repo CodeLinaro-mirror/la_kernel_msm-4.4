@@ -3465,10 +3465,29 @@
 					type = "passive";
 				};
 
+				cpu0_warm: cpu-warm {
+					temperature = <15000>;
+					hysteresis = <2000>;
+					type = "passive";
+					monitor-falling;
+				};
+
 				cpu0_crit: cpu_crit {
 					temperature = <110000>;
 					hysteresis = <2000>;
 					type = "critical";
+				};
+			};
+
+			cooling-maps {
+				map0 {
+					trip = <&cpu0_alert0>;
+					cooling-device = <&CPU0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+				};
+
+				map1 {
+					trip = <&cpu0_warm>;
+					cooling-device = <&CPU0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
 			};
 		};
@@ -3486,10 +3505,29 @@
 					type = "passive";
 				};
 
+				cpu1_warm: cpu-warm {
+					temperature = <15000>;
+					hysteresis = <2000>;
+					type = "passive";
+					monitor-falling;
+				};
+
 				cpu1_crit: cpu_crit {
 					temperature = <110000>;
 					hysteresis = <2000>;
 					type = "critical";
+				};
+			};
+
+			cooling-maps {
+				map0 {
+					trip = <&cpu1_alert0>;
+					cooling-device = <&CPU1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+				};
+
+				map1 {
+					trip = <&cpu1_warm>;
+					cooling-device = <&CPU1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
 			};
 		};
@@ -3507,10 +3545,29 @@
 					type = "passive";
 				};
 
+				cpu2_warm: cpu-warm {
+					temperature = <15000>;
+					hysteresis = <2000>;
+					type = "passive";
+					monitor-falling;
+				};
+
 				cpu2_crit: cpu_crit {
 					temperature = <110000>;
 					hysteresis = <2000>;
 					type = "critical";
+				};
+			};
+
+			cooling-maps {
+				map0 {
+					trip = <&cpu2_alert0>;
+					cooling-device = <&CPU2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+				};
+
+				map1 {
+					trip = <&cpu2_warm>;
+					cooling-device = <&CPU2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
 			};
 		};
@@ -3528,10 +3585,29 @@
 					type = "passive";
 				};
 
+				cpu3_warm: cpu-warm {
+					temperature = <15000>;
+					hysteresis = <2000>;
+					type = "passive";
+					monitor-falling;
+				};
+
 				cpu3_crit: cpu_crit {
 					temperature = <110000>;
 					hysteresis = <2000>;
 					type = "critical";
+				};
+			};
+
+			cooling-maps {
+				map0 {
+					trip = <&cpu3_alert0>;
+					cooling-device = <&CPU3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+				};
+
+				map1 {
+					trip = <&cpu3_warm>;
+					cooling-device = <&CPU3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
 			};
 		};
