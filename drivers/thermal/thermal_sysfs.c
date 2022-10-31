@@ -107,6 +107,35 @@ trip_point_type_show(struct device *dev, struct device_attribute *attr,
 }
 
 static ssize_t
+trip_point_direction_show(struct device *dev, struct device_attribute *attr,
+			  char *buf)
+{
+	struct thermal_zone_device *tz = to_thermal_zone(dev);
+	enum thermal_trip_type type;
+	enum thermal_trip_monitor_type monitor_type = THERMAL_TRIP_MONITOR_RISING;
+	int trip, result;
+
+	if (!tz->ops->get_trip_mon_type)
+		return -EPERM;
+
+	if (sscanf(attr->attr.name, "trip_point_%d_direction", &trip) != 1)
+		return -EINVAL;
+
+	result = tz->ops->get_trip_mon_type(tz, trip, &monitor_type);
+	if (result)
+		return result;
+
+	switch (type) {
+	case THERMAL_TRIP_MONITOR_RISING:
+		return sprintf(buf, "rising\n");
+	case THERMAL_TRIP_MONITOR_FALLING:
+		return sprintf(buf, "falling\n");
+	default:
+		return sprintf(buf, "unknown\n");
+	}
+}
+
+static ssize_t
 trip_point_temp_store(struct device *dev, struct device_attribute *attr,
 		      const char *buf, size_t count)
 {
@@ -442,7 +471,18 @@ static int create_trip_attrs(struct thermal_zone_device *tz, int mask)
 		}
 	}
 
-	attrs = kcalloc(tz->trips * 3 + 1, sizeof(*attrs), GFP_KERNEL);
+	if (tz->ops->get_trip_mon_type) {
+		tz->trip_direction_attrs = kcalloc(tz->trips,
+					      sizeof(*tz->trip_direction_attrs),
+					      GFP_KERNEL);
+		if (!tz->trip_direction_attrs) {
+			kfree(tz->trip_type_attrs);
+			kfree(tz->trip_temp_attrs);
+			return -ENOMEM;
+		}
+	}
+
+	attrs = kcalloc(tz->trips * 4 + 1, sizeof(*attrs), GFP_KERNEL);
 	if (!attrs) {
 		kfree(tz->trip_type_attrs);
 		kfree(tz->trip_temp_attrs);
@@ -481,23 +521,37 @@ static int create_trip_attrs(struct thermal_zone_device *tz, int mask)
 		attrs[indx + tz->trips] = &tz->trip_temp_attrs[indx].attr.attr;
 
 		/* create Optional trip hyst attribute */
-		if (!tz->ops->get_trip_hyst)
-			continue;
-		snprintf(tz->trip_hyst_attrs[indx].name, THERMAL_NAME_LENGTH,
-			 "trip_point_%d_hyst", indx);
+		if (tz->ops->get_trip_hyst) {
+			snprintf(tz->trip_hyst_attrs[indx].name, THERMAL_NAME_LENGTH,
+				 "trip_point_%d_hyst", indx);
 
-		sysfs_attr_init(&tz->trip_hyst_attrs[indx].attr.attr);
-		tz->trip_hyst_attrs[indx].attr.attr.name =
-					tz->trip_hyst_attrs[indx].name;
-		tz->trip_hyst_attrs[indx].attr.attr.mode = S_IRUGO;
-		tz->trip_hyst_attrs[indx].attr.show = trip_point_hyst_show;
-		if (tz->ops->set_trip_hyst) {
-			tz->trip_hyst_attrs[indx].attr.attr.mode |= S_IWUSR;
-			tz->trip_hyst_attrs[indx].attr.store =
-					trip_point_hyst_store;
+			sysfs_attr_init(&tz->trip_hyst_attrs[indx].attr.attr);
+			tz->trip_hyst_attrs[indx].attr.attr.name =
+						tz->trip_hyst_attrs[indx].name;
+			tz->trip_hyst_attrs[indx].attr.attr.mode = S_IRUGO;
+			tz->trip_hyst_attrs[indx].attr.show = trip_point_hyst_show;
+			if (tz->ops->set_trip_hyst) {
+				tz->trip_hyst_attrs[indx].attr.attr.mode |= S_IWUSR;
+				tz->trip_hyst_attrs[indx].attr.store =
+						trip_point_hyst_store;
+			}
+			attrs[indx + tz->trips * 2] =
+						&tz->trip_hyst_attrs[indx].attr.attr;
 		}
-		attrs[indx + tz->trips * 2] =
-					&tz->trip_hyst_attrs[indx].attr.attr;
+
+		/* create Optional trip direction attribute */
+		if (tz->ops->get_trip_mon_type) {
+			snprintf(tz->trip_direction_attrs[indx].name, THERMAL_NAME_LENGTH,
+				 "trip_point_%d_direction", indx);
+
+			sysfs_attr_init(&tz->trip_direction_attrs[indx].attr.attr);
+			tz->trip_direction_attrs[indx].attr.attr.name =
+						tz->trip_direction_attrs[indx].name;
+			tz->trip_direction_attrs[indx].attr.attr.mode = S_IRUGO;
+			tz->trip_direction_attrs[indx].attr.show = trip_point_direction_show;
+			attrs[indx + tz->trips * 3] =
+						&tz->trip_direction_attrs[indx].attr.attr;
+		}
 	}
 	attrs[tz->trips * 3] = NULL;
 

@@ -153,6 +153,7 @@ struct thermal_zone_device {
 	struct thermal_attr *trip_temp_attrs;
 	struct thermal_attr *trip_type_attrs;
 	struct thermal_attr *trip_hyst_attrs;
+	struct thermal_attr *trip_direction_attrs;
 	enum thermal_device_mode mode;
 	void *devdata;
 	int trips;
