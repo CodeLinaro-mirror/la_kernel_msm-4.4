@@ -1565,7 +1565,7 @@ static int cpr_find_initial_corner(struct device *dev, struct clk *cpu_clk,
 
 	if (!corner) {
 		dev_err(dev, "boot up corner not found\n");
-		return -EINVAL;
+		ret = 0;
 	}
 
 	dev_dbg(dev, "boot up perf state: %u\n", ret);
