@@ -3624,12 +3624,27 @@
 					hysteresis = <2000>;
 					type = "passive";
 				};
+
+				gpu1_warm: trip-warm {
+					temperature = <15000>;
+					hysteresis = <2000>;
+					type = "passive";
+					monitor-falling;
+				};
 			};
 
 			cooling-maps {
 				map0 {
 					trip = <&gpu1_alert0>;
 					cooling-device = <&gpu THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+				};
+
+				map1 {
+					trip = <&gpu1_warm>;
+					cooling-device = <&CPU0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
 			};
 		};
@@ -3646,12 +3661,27 @@
 					hysteresis = <2000>;
 					type = "passive";
 				};
+
+				gpu2_warm: trip-warm {
+					temperature = <15000>;
+					hysteresis = <2000>;
+					type = "passive";
+					monitor-falling;
+				};
 			};
 
 			cooling-maps {
 				map0 {
 					trip = <&gpu2_alert0>;
 					cooling-device = <&gpu THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+				};
+
+				map1 {
+					trip = <&gpu2_warm>;
+					cooling-device = <&CPU0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
 			};
 		};
