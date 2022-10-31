@@ -1458,6 +1458,7 @@ static int cpr3_corner_init(struct cpr_thread *thread)
 			if (scaling < 0) {
 				dev_warn(drv->dev, "Error calculating scaling: %d\n", scaling);
 				return scaling;
+			}
 
 			freq_diff_mhz = fuse->max_freq - corner->corner.freq;
 			do_div(freq_diff_mhz, 1000000); /* now in MHz */
