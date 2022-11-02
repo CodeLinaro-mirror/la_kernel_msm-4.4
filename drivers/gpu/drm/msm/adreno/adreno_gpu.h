@@ -312,8 +312,13 @@ int adreno_gpu_state_put(struct msm_gpu_state *state);
  * attached targets
  */
 struct msm_gem_address_space *
+adreno_create_address_space(struct msm_gpu *gpu,
+			    struct platform_device *pdev);
+
+struct msm_gem_address_space *
 adreno_iommu_create_address_space(struct msm_gpu *gpu,
-		struct platform_device *pdev);
+				  struct platform_device *pdev,
+				  unsigned long quirks);
 
 /*
  * For a5xx and a6xx targets load the zap shader that is used to pull the GPU
