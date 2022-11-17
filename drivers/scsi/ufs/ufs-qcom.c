@@ -11,6 +11,7 @@
 #include <linux/gpio/consumer.h>
 #include <linux/reset-controller.h>
 #include <linux/devfreq.h>
+#include <linux/interconnect.h>
 
 #include "ufshcd.h"
 #include "ufshcd-pltfrm.h"
@@ -964,6 +965,23 @@ static int __init get_android_boot_dev(char *str)
 __setup("androidboot.bootdevice=", get_android_boot_dev);
 #endif
 
+static int ufs_qcom_icc_init(struct device *dev, char *pathname,
+		u32 avg_bw, u32 peak_bw)
+{
+	struct icc_path *path;
+	int ret;
+
+	path = devm_of_icc_get(dev, pathname);
+	if (IS_ERR(path))
+		return dev_err_probe(dev, PTR_ERR(path), "failed to acquire interconnect path\n");
+
+	ret = icc_set_bw(path, avg_bw, peak_bw);
+	if (ret < 0)
+		return dev_err_probe(dev, ret, "failed to set bandwidth request\n");
+
+	return 0;
+}
+
 /**
  * ufs_qcom_init - bind phy with controller
  * @hba: host controller instance
@@ -1016,6 +1034,14 @@ static int ufs_qcom_init(struct ufs_hba *hba)
 		dev_warn(dev, "Failed to register reset controller\n");
 		err = 0;
 	}
+
+	err = ufs_qcom_icc_init(dev, "ufs-ddr", 4096000, 0);
+	if (err)
+		goto out_variant_clear;
+
+	err = ufs_qcom_icc_init(dev, "cpu-ufs", 1000, 0);
+	if (err)
+		goto out_variant_clear;
 
 	/*
 	 * voting/devoting device ref_clk source is time consuming hence
