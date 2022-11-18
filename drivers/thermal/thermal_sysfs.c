@@ -111,7 +111,6 @@ trip_point_direction_show(struct device *dev, struct device_attribute *attr,
 			  char *buf)
 {
 	struct thermal_zone_device *tz = to_thermal_zone(dev);
-	enum thermal_trip_type type;
 	enum thermal_trip_monitor_type monitor_type = THERMAL_TRIP_MONITOR_RISING;
 	int trip, result;
 
@@ -125,7 +124,7 @@ trip_point_direction_show(struct device *dev, struct device_attribute *attr,
 	if (result)
 		return result;
 
-	switch (type) {
+	switch (monitor_type) {
 	case THERMAL_TRIP_MONITOR_RISING:
 		return sprintf(buf, "rising\n");
 	case THERMAL_TRIP_MONITOR_FALLING:
@@ -553,7 +552,7 @@ static int create_trip_attrs(struct thermal_zone_device *tz, int mask)
 						&tz->trip_direction_attrs[indx].attr.attr;
 		}
 	}
-	attrs[tz->trips * 3] = NULL;
+	attrs[tz->trips * 4] = NULL;
 
 	tz->trips_attribute_group.attrs = attrs;
 
