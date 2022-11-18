@@ -396,6 +396,96 @@
 		reg = <0x0 0x80000000 0x0 0x0>;
 	};
 
+	pd_cx_cooling: pd-cx-cooling {
+		compatible = "power-domain-cooling";
+		power-domains = <&rpmpd MSM8996_VDDCX>;
+		#cooling-cells = <2>;
+
+		operating-points-v2 = <&cx_cool_opp_table>;
+
+		cx_cool_opp_table: opp-table {
+			opp1 {
+				opp-level = <1>;
+				required-opps = <&rpmpd_opp1>;
+			};
+
+			opp2 {
+				opp-level = <2>;
+				required-opps = <&rpmpd_opp2>;
+			};
+
+			opp3 {
+				opp-level = <3>;
+				required-opps = <&rpmpd_opp3>;
+			};
+
+			opp4 {
+				opp-level = <4>;
+				required-opps = <&rpmpd_opp4>;
+			};
+
+			opp5 {
+				opp-level = <5>;
+				required-opps = <&rpmpd_opp5>;
+			};
+
+			opp6 {
+				opp-level = <6>;
+				required-opps = <&rpmpd_opp6>;
+			};
+
+			opp7 {
+				opp-level = <7>;
+				required-opps = <&rpmpd_opp7>;
+			};
+		};
+	};
+
+	pd_mx_cooling: pd-mx-cooling {
+		compatible = "power-domain-cooling";
+		power-domains = <&rpmpd MSM8996_VDDMX>;
+		#cooling-cells = <2>;
+
+		operating-points-v2 = <&mx_cool_opp_table>;
+
+		mx_cool_opp_table: opp-table {
+			opp1 {
+				opp-level = <1>;
+				required-opps = <&rpmpd_opp1>;
+			};
+
+			opp2 {
+				opp-level = <2>;
+				required-opps = <&rpmpd_opp2>;
+			};
+
+			opp3 {
+				opp-level = <3>;
+				required-opps = <&rpmpd_opp3>;
+			};
+
+			opp4 {
+				opp-level = <4>;
+				required-opps = <&rpmpd_opp4>;
+			};
+
+			opp5 {
+				opp-level = <5>;
+				required-opps = <&rpmpd_opp5>;
+			};
+
+			opp6 {
+				opp-level = <6>;
+				required-opps = <&rpmpd_opp6>;
+			};
+
+			opp7 {
+				opp-level = <7>;
+				required-opps = <&rpmpd_opp7>;
+			};
+		};
+	};
+
 	psci {
 		compatible = "arm,psci-1.0";
 		method = "smc";
@@ -3657,7 +3747,9 @@
 							 <&CPU1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&CPU2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&CPU3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&gpu THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+							 <&gpu THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&pd_cx_cooling THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&pd_mx_cooling THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
 			};
 		};
@@ -3695,7 +3787,9 @@
 							 <&CPU1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&CPU2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&CPU3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&gpu THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+							 <&gpu THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&pd_cx_cooling THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&pd_mx_cooling THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
 			};
 		};
