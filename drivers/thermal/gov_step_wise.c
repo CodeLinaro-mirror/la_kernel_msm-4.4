@@ -53,10 +53,17 @@ static unsigned long get_target_state(struct thermal_instance *instance,
 
 	if (!instance->initialized) {
 		if (throttle) {
-			next_target = (cur_state + 1) >= instance->upper ?
-					instance->upper :
-					((cur_state + 1) < instance->lower ?
-					instance->lower : (cur_state + 1));
+			if (type == THERMAL_TRIP_MONITOR_FALLING) {
+				next_target = cur_state  >= instance->upper ?
+						instance->upper :
+						((cur_state ) < instance->lower ?
+						instance->lower : (cur_state ));
+			} else {
+				next_target = (cur_state + 1) >= instance->upper ?
+						instance->upper :
+						((cur_state + 1) < instance->lower ?
+						instance->lower : (cur_state + 1));
+			}
 		} else {
 			next_target = THERMAL_NO_TARGET;
 		}
@@ -67,12 +74,12 @@ static unsigned long get_target_state(struct thermal_instance *instance,
 	switch (trend) {
 	case THERMAL_TREND_RAISING:
 		if (type == THERMAL_TRIP_MONITOR_FALLING) {
-			if (cur_state <= instance->lower) {
+			if (cur_state > instance->upper) {
 				if (!throttle)
 					next_target = THERMAL_NO_TARGET;
 			} else {
 				if (!throttle) {
-					next_target = cur_state - 1;
+					next_target = cur_state + 1;
 					if (next_target > instance->upper)
 						next_target = instance->upper;
 				}
@@ -93,8 +100,7 @@ static unsigned long get_target_state(struct thermal_instance *instance,
 	case THERMAL_TREND_DROPPING:
 		if (type == THERMAL_TRIP_MONITOR_FALLING) {
 			if (throttle) {
-				next_target = cur_state < instance->upper ?
-					    (cur_state + 1) : instance->upper;
+				next_target = cur_state - 1;
 				if (next_target < instance->lower)
 					next_target = instance->lower;
 			}
