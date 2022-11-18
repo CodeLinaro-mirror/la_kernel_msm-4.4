@@ -493,4 +493,11 @@ config KHADAS_MCU_FAN_THERMAL
 	  If you say yes here you get support for the FAN controlled
 	  by the Microcontroller found on the Khadas VIM boards.
 
+config PD_COOLING
+	tristate "Generic warming up device using power domains"
+	depends on OF || COMPILE_TEST
+	help
+	  If you say yes here support for the generic power-domain-based
+	  warming up will be enabled.
+
 endif
