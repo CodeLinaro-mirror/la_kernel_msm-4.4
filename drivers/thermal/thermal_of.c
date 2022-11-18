@@ -847,7 +847,7 @@ static int thermal_of_populate_trip(struct device_node *np,
 		return ret;
 	}
 
-	ret = of_property_read_bool(np, "monitor-falling");
+	is_monitor_falling = of_property_read_bool(np, "monitor-falling");
 	if (is_monitor_falling)
 		trip->monitor_type = THERMAL_TRIP_MONITOR_FALLING;
 	else
