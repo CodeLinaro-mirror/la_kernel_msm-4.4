@@ -1169,6 +1169,39 @@ int dev_pm_opp_of_add_table_noclk(struct device *dev, int index)
 }
 EXPORT_SYMBOL_GPL(dev_pm_opp_of_add_table_noclk);
 
+/**
+ * devm_pm_opp_of_add_table_noclk() - Initialize opp table from device tree without
+ *				getting the clk for device.
+ * @dev:	device pointer used to lookup OPP table.
+ * @index:	Index number.
+ *
+ * Register the initial OPP table with the OPP library for given device.
+ *
+ * The opp_table structure will be freed after the device is destroyed.
+ *
+ * Return:
+ * 0		On success OR
+ *		Duplicate OPPs (both freq and volt are same) and opp->available
+ * -EEXIST	Freq are same and volt are different OR
+ *		Duplicate OPPs (both freq and volt are same) and !opp->available
+ * -ENOMEM	Memory allocation failure
+ * -ENODEV	when 'operating-points' property is not found or is invalid data
+ *		in device node.
+ * -ENODATA	when empty 'operating-points' property is found
+ * -EINVAL	when invalid entries are found in opp-v2 table
+ */
+int devm_pm_opp_of_add_table_noclk(struct device *dev, int index)
+{
+	int ret;
+
+	ret = dev_pm_opp_of_add_table_noclk(dev, index);
+	if (ret)
+		return ret;
+
+	return devm_add_action_or_reset(dev, devm_pm_opp_of_table_release, dev);
+}
+EXPORT_SYMBOL_GPL(devm_pm_opp_of_add_table_noclk);
+
 /* CPU device specific helpers */
 
 /**
