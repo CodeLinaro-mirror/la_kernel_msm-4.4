@@ -142,6 +142,23 @@ static void update_passive_instance(struct thermal_zone_device *tz,
 		tz->passive += value;
 }
 
+static char get_trend(enum thermal_trend trend) {
+	switch (trend) {
+	case THERMAL_TREND_STABLE:
+		return '-';
+	case THERMAL_TREND_RAISING:
+		return '/';
+	case THERMAL_TREND_DROPPING:
+		return '\\';
+	case THERMAL_TREND_RAISE_FULL:
+		return '+';
+	case THERMAL_TREND_DROP_FULL:
+		return '_';
+	default:
+		return '?';
+	}
+}
+
 static void thermal_zone_trip_update(struct thermal_zone_device *tz, int trip)
 {
 	int trip_temp;
@@ -169,8 +186,8 @@ static void thermal_zone_trip_update(struct thermal_zone_device *tz, int trip)
 		trace_thermal_zone_trip(tz, trip, trip_type);
 	}
 
-	dev_dbg(&tz->device, "Trip%d[type=%d,temp=%d]:trend=%d,throttle=%d\n",
-				trip, trip_type, trip_temp, trend, throttle);
+	dev_dbg(&tz->device, "Trip%d[type=%d,temp=%d]:trend=%c,throttle=%d\n",
+				trip, trip_type, trip_temp, get_trend(trend), throttle);
 
 	mutex_lock(&tz->lock);
 
