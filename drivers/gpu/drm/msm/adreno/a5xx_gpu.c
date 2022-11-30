@@ -1763,6 +1763,7 @@ struct msm_gpu *a5xx_gpu_init(struct drm_device *dev)
 	struct platform_device *pdev = priv->gpu_pdev;
 	struct a5xx_gpu *a5xx_gpu = NULL;
 	struct adreno_gpu *adreno_gpu;
+	struct icc_path *icc_path;
 	struct msm_gpu *gpu;
 	int ret;
 
@@ -1810,6 +1811,19 @@ struct msm_gpu *a5xx_gpu_init(struct drm_device *dev)
 		a5xx_destroy(&(a5xx_gpu->base.base));
 		return ERR_PTR(ret);
 	}
+
+	icc_path = devm_of_icc_get(&pdev->dev, "gfx-mem");
+	if (IS_ERR(icc_path)) {
+		a5xx_destroy(&(a5xx_gpu->base.base));
+		return ERR_CAST(icc_path);
+	}
+
+	/*
+	 * Set the ICC path to maximum speed for now by multiplying the fastest
+	 * frequency by the bus width (8). We'll want to scale this later on to
+	 * improve battery life.
+	 */
+	icc_set_bw(icc_path, 0, Bps_to_icc(gpu->fast_rate) * 8);
 
 	if (gpu->aspace)
 		msm_mmu_set_fault_handler(gpu->aspace->mmu, gpu, a5xx_fault_handler);
