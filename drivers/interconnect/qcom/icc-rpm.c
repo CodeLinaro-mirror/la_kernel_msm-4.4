@@ -370,7 +370,7 @@ int qnoc_probe(struct platform_device *pdev)
 		}
 	}
 
-	ret = devm_clk_bulk_get(dev, qp->num_clks, qp->bus_clks);
+	ret = devm_clk_bulk_get_optional(dev, qp->num_clks, qp->bus_clks);
 	if (ret)
 		return ret;
 
