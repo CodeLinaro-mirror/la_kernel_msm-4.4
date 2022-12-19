@@ -67,6 +67,7 @@ struct time_in_idle {
  */
 struct cpufreq_cooling_device {
 	u32 last_load;
+	bool warming;
 	unsigned int cpufreq_state;
 	unsigned int max_level;
 	struct em_perf_domain *em;
@@ -75,6 +76,7 @@ struct cpufreq_cooling_device {
 	struct time_in_idle *idle_time;
 #endif
 	struct freq_qos_request qos_req;
+	struct thermal_cooling_device *warming_cdev;
 };
 
 #ifdef CONFIG_THERMAL_GOV_POWER_ALLOCATOR
@@ -387,6 +389,9 @@ static unsigned int get_state_freq(struct cpufreq_cooling_device *cpufreq_cdev,
 	struct cpufreq_policy *policy;
 	unsigned long idx;
 
+	if (cpufreq_cdev->warming)
+		state = cpufreq_cdev->max_level - state;
+
 #ifdef CONFIG_THERMAL_GOV_POWER_ALLOCATOR
 	/* Use the Energy Model table if available */
 	if (cpufreq_cdev->em) {
@@ -515,6 +520,7 @@ static struct thermal_cooling_device_ops cpufreq_cooling_ops = {
 static struct thermal_cooling_device *
 __cpufreq_cooling_register(struct device_node *np,
 			struct cpufreq_policy *policy,
+			bool warming,
 			struct em_perf_domain *em)
 {
 	struct thermal_cooling_device *cdev;
@@ -523,6 +529,7 @@ __cpufreq_cooling_register(struct device_node *np,
 	struct device *dev;
 	int ret;
 	struct thermal_cooling_device_ops *cooling_ops;
+	enum freq_qos_req_type req_type = warming ? FREQ_QOS_MIN : FREQ_QOS_MAX;
 	char *name;
 
 	dev = get_cpu_device(policy->cpu);
@@ -547,6 +554,7 @@ __cpufreq_cooling_register(struct device_node *np,
 	if (!cpufreq_cdev)
 		return ERR_PTR(-ENOMEM);
 
+	cpufreq_cdev->warming = warming;
 	cpufreq_cdev->policy = policy;
 
 	ret = allocate_idle_time(cpufreq_cdev);
@@ -576,7 +584,7 @@ __cpufreq_cooling_register(struct device_node *np,
 	}
 
 	ret = freq_qos_add_request(&policy->constraints,
-				   &cpufreq_cdev->qos_req, FREQ_QOS_MAX,
+				   &cpufreq_cdev->qos_req, req_type,
 				   get_state_freq(cpufreq_cdev, 0));
 	if (ret < 0) {
 		pr_err("%s: Failed to add freq constraint (%d)\n", __func__,
@@ -622,7 +630,7 @@ free_cdev:
 struct thermal_cooling_device *
 cpufreq_cooling_register(struct cpufreq_policy *policy)
 {
-	return __cpufreq_cooling_register(NULL, policy, NULL);
+	return __cpufreq_cooling_register(NULL, policy, false, NULL);
 }
 EXPORT_SYMBOL_GPL(cpufreq_cooling_register);
 
@@ -649,6 +657,7 @@ struct thermal_cooling_device *
 of_cpufreq_cooling_register(struct cpufreq_policy *policy)
 {
 	struct device_node *np = of_get_cpu_node(policy->cpu, NULL);
+	struct device_node *warm_np;
 	struct thermal_cooling_device *cdev = NULL;
 
 	if (!np) {
@@ -660,11 +669,29 @@ of_cpufreq_cooling_register(struct cpufreq_policy *policy)
 	if (of_find_property(np, "#cooling-cells", NULL)) {
 		struct em_perf_domain *em = em_cpu_get(policy->cpu);
 
-		cdev = __cpufreq_cooling_register(np, policy, em);
+		cdev = __cpufreq_cooling_register(np, policy, false, em);
 		if (IS_ERR(cdev)) {
 			pr_err("cpufreq_cooling: cpu%d failed to register as cooling device: %ld\n",
 			       policy->cpu, PTR_ERR(cdev));
 			cdev = NULL;
+		}
+	}
+
+	warm_np = of_get_child_by_name(np, "warming");
+	if (warm_np) {
+		if (of_find_property(np, "#cooling-cells", NULL)) {
+			struct em_perf_domain *em = em_cpu_get(policy->cpu);
+			struct cpufreq_cooling_device *cpufreq_cdev;
+			struct thermal_cooling_device *warm_cdev;
+
+			cpufreq_cdev = cdev->devdata;
+
+			warm_cdev = __cpufreq_cooling_register(warm_np, policy, true, em);
+			if (IS_ERR(warm_cdev))
+				pr_err("cpufreq_cooling: cpu%d failed to register as warming up device: %ld\n",
+				       policy->cpu, PTR_ERR(warm_cdev));
+			else
+				cpufreq_cdev->warming_cdev = warm_cdev;
 		}
 	}
 
@@ -687,6 +714,11 @@ void cpufreq_cooling_unregister(struct thermal_cooling_device *cdev)
 		return;
 
 	cpufreq_cdev = cdev->devdata;
+
+	if (cpufreq_cdev->warming_cdev) {
+		cpufreq_cooling_unregister(cpufreq_cdev->warming_cdev);
+		cpufreq_cdev->warming_cdev = NULL;
+	}
 
 	thermal_cooling_device_unregister(cdev);
 	freq_qos_remove_request(&cpufreq_cdev->qos_req);
