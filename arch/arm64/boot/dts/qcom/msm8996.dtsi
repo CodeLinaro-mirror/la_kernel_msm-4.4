@@ -54,6 +54,9 @@
 			      compatible = "cache";
 			      cache-level = <2>;
 			};
+			CPU0_WARM: warming {
+				#cooling-cells = <2>;
+			};
 		};
 
 		CPU1: cpu@1 {
@@ -67,6 +70,9 @@
 			operating-points-v2 = <&cluster0_opp>;
 			#cooling-cells = <2>;
 			next-level-cache = <&L2_0>;
+			CPU1_WARM: warming {
+				#cooling-cells = <2>;
+			};
 		};
 
 		CPU2: cpu@100 {
@@ -84,6 +90,9 @@
 			      compatible = "cache";
 			      cache-level = <2>;
 			};
+			CPU2_WARM: warming {
+				#cooling-cells = <2>;
+			};
 		};
 
 		CPU3: cpu@101 {
@@ -97,6 +106,9 @@
 			operating-points-v2 = <&cluster1_opp>;
 			#cooling-cells = <2>;
 			next-level-cache = <&L2_1>;
+			CPU3_WARM: warming {
+				#cooling-cells = <2>;
+			};
 		};
 
 		cpu-map {
@@ -3577,10 +3589,10 @@
 
 				map1 {
 					trip = <&cpu0_warm>;
-					cooling-device = <&CPU0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					cooling-device = <&CPU0_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU1_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU2_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU3_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
 			};
 		};
@@ -3620,10 +3632,10 @@
 
 				map1 {
 					trip = <&cpu1_warm>;
-					cooling-device = <&CPU0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					cooling-device = <&CPU0_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU1_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU2_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU3_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
 			};
 		};
@@ -3663,10 +3675,10 @@
 
 				map1 {
 					trip = <&cpu2_warm>;
-					cooling-device = <&CPU0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					cooling-device = <&CPU0_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU1_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU2_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU3_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
 			};
 		};
@@ -3706,10 +3718,10 @@
 
 				map1 {
 					trip = <&cpu3_warm>;
-					cooling-device = <&CPU0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					cooling-device = <&CPU0_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU1_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU2_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU3_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
 			};
 		};
@@ -3743,11 +3755,10 @@
 
 				map1 {
 					trip = <&gpu1_warm>;
-					cooling-device = <&CPU0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&gpu THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+					cooling-device = <&CPU0_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU1_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU2_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU3_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&pd_cx_cooling THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&pd_mx_cooling THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
@@ -3783,11 +3794,10 @@
 
 				map1 {
 					trip = <&gpu2_warm>;
-					cooling-device = <&CPU0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&CPU3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-							 <&gpu THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+					cooling-device = <&CPU0_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU1_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU2_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&CPU3_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&pd_cx_cooling THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&pd_mx_cooling THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
