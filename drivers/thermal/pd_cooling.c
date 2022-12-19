@@ -93,10 +93,9 @@ static int pd_warm_probe(struct platform_device *pdev)
 
 	data->dev = dev;
 	data->nr_opps = nr_opps;
-	data->state = nr_opps - 1;
 
-	for (i = 0, level = UINT_MAX; i < nr_opps; i++, level--) {
-		struct dev_pm_opp *opp = dev_pm_opp_find_level_floor(dev, &level);
+	for (i = 0, level = 0; i < nr_opps; i++, level++) {
+		struct dev_pm_opp *opp = dev_pm_opp_find_level_ceil(dev, &level);
 
 		if (IS_ERR(opp))
 			return dev_err_probe(dev, PTR_ERR(opp), "Error getting level %d\n", i);
