@@ -200,108 +200,11 @@
 			       <56 3>, <61 2>, <64 1>, 
 			       <68 1>, <72 8>, <96 1>;
 
-	sdc1_on: sdc1-on-state {
-		clk-pins {
-			pins = "sdc1_clk";
-			bias-disable;		/* NO pull */
-			drive-strength = <16>;	/* 16 MA */
-		};
-
-		cmd-pins {
-			pins = "sdc1_cmd";
-			bias-pull-up;		/* pull up */
-			drive-strength = <10>;	/* 10 MA */
-		};
-
-		data-pins {
-			pins = "sdc1_data";
-			bias-pull-up;		/* pull up */
-			drive-strength = <10>;	/* 10 MA */
-		};
-
-		rclk-pins {
-			pins = "sdc1_rclk";
-			bias-pull-down; 	/* pull down */
-		};
-	};
-
-	sdc1_off: sdc1-off-state {
-		clk-pins {
-			pins = "sdc1_clk";
-			bias-disable;		/* NO pull */
-			drive-strength = <2>;	/* 2 MA */
-		};
-
-		cmd-pins {
-			pins = "sdc1_cmd";
-			bias-pull-up;		/* pull up */
-			drive-strength = <2>;	/* 2 MA */
-		};
-
-		data-pins {
-			pins = "sdc1_data";
-			bias-pull-up;		/* pull up */
-			drive-strength = <2>;	/* 2 MA */
-		};
-
-		rclk-pins {
-			pins = "sdc1_rclk";
-			bias-pull-down; 	/* pull down */
-		};
-	};
-
-	sdc2_on: sdc2-on-state {
-		clk-pins {
-			pins = "sdc2_clk";
-			bias-disable;		/* NO pull */
-			drive-strength = <16>;	/* 16 MA */
-		};
-
-		cmd-pins {
-			pins = "sdc2_cmd";
-			bias-pull-up;		/* pull up */
-			drive-strength = <10>;	/* 10 MA */
-		};
-
-		data-pins {
-			pins = "sdc2_data";
-			bias-pull-up;		/* pull up */
-			drive-strength = <10>;	/* 10 MA */
-		};
-
-		sd-cd-pins {
-			pins = "gpio88";
-			function = "gpio";
-			bias-pull-up;
-			drive-strength = <2>;
-		};
-	};
-
-	sdc2_off: sdc2-off-state {
-		clk-pins {
-			pins = "sdc2_clk";
-			bias-disable;		/* NO pull */
-			drive-strength = <2>;	/* 2 MA */
-		};
-
-		cmd-pins {
-			pins = "sdc2_cmd";
-			bias-pull-up;		/* pull up */
-			drive-strength = <2>;	/* 2 MA */
-		};
-
-		data-pins {
-			pins = "sdc2_data";
-			bias-pull-up;		/* pull up */
-			drive-strength = <2>;	/* 2 MA */
-		};
-
-		sd_cd-pins {
-			pins = "gpio88";
-			function = "gpio";
-			bias-disable;
-			drive-strength = <2>;
-		};
+	sdc2_card_det_n: sd-card-det-n-state {
+		pins = "gpio88";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-pull-up;
 	};
 };
 
@@ -309,8 +212,8 @@
 	status = "okay";
 
 	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&sdc1_on>;
-	pinctrl-1 = <&sdc1_off>;
+	pinctrl-0 = <&sdc1_state_on>;
+	pinctrl-1 = <&sdc1_state_off>;
 	vmmc-supply = <&vreg_l24a_2p96>; /* emmc power line */
 	vqmmc-supply = <&vreg_l11a_1p8>; /* emmc vddq */
 	bus-width = <8>;
@@ -321,10 +224,10 @@
 &sdhc_2 {
 	status = "okay";
 
-	cd-gpios = <&tlmm 88 GPIO_ACTIVE_HIGH>; /* card detect gpio */
+	cd-gpios = <&tlmm 88 GPIO_ACTIVE_LOW>; /* card detect gpio */
 	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&sdc2_on>;
-	pinctrl-1 = <&sdc2_off>;
+	pinctrl-0 = <&sdc2_state_on &sdc2_card_det_n>;
+	pinctrl-1 = <&sdc2_state_off &sdc2_card_det_n>;
 	vmmc-supply = <&vreg_l22a_2p96>; /* Card power line */
 	vqmmc-supply = <&vreg_l5a_2p96>; /* IO line power */
 	bus-width = <4>;
