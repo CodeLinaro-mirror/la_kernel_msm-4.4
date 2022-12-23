@@ -47,15 +47,10 @@ static const u8 cbf_pll_regs[PLL_OFF_MAX_REGS] = {
 
 static const struct alpha_pll_config cbfpll_config = {
 	.l = 72,
-#if 1
 	.config_ctl_val = 0x200d4828,
 	.config_ctl_hi_val = 0x006,
-	//.test_ctl_val = 0x1c000000,
-	//.test_ctl_hi_val = 0x00004000,
-#else
-	.config_ctl_val = 0x200d4aa8,
-	.config_ctl_hi_val = 0x006,
-#endif
+	.test_ctl_val = 0x1c000000,
+	.test_ctl_hi_val = 0x00004000,
 	.pre_div_mask = BIT(12),
 	.post_div_mask = 0x3 << 8,
 	.post_div_val = 0x1 << 8,
@@ -73,7 +68,7 @@ static struct clk_alpha_pll cbf_pll = {
 			{ .index = DT_XO, },
 		},
 		.num_parents = 1,
-		.ops = &clk_alpha_pll_huayra_ops,
+		.ops = &clk_alpha_pll_hwfsm_ops,
 	},
 };
 
