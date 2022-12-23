@@ -3532,6 +3532,13 @@
 		power-manager@9a10000 {
 			compatible = "qcom,msm8996-saw2-v3.0-cbf", "qcom,saw2";
 			reg = <0x09a10000 0x1000>;
+
+			vreg_spm: spm {
+				regulator-min-microvolt = <980000>;
+				regulator-max-microvolt = <980000>;
+				regulator-always-on;
+
+			};
 		};
 
 		cbf: clock-controller@9a11000 {
