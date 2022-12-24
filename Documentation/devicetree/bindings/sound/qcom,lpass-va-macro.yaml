@@ -89,7 +89,7 @@ allOf:
         clock-names:
           items:
             - const: mclk
-            - const: core
+            - const: macro
             - const: dcodec
 
   - if:
@@ -107,7 +107,7 @@ allOf:
         clock-names:
           items:
             - const: mclk
-            - const: core
+            - const: macro
             - const: dcodec
             - const: npl
 
