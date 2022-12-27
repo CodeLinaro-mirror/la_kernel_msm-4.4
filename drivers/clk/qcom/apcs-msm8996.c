@@ -35,14 +35,17 @@ static int qcom_apcs_msm8996_clk_probe(struct platform_device *pdev)
 	}
 
 	regmap_read(regmap, APCS_AUX_OFFSET, &val);
-	dev_dbg(dev, "APCS AUX %x (%ld)\n", val, FIELD_GET(APCS_AUX_DIV_MASK, val));
 	regmap_update_bits(regmap, APCS_AUX_OFFSET, APCS_AUX_DIV_MASK,
 			   FIELD_PREP(APCS_AUX_DIV_MASK, APCS_AUX_DIV_2));
 
 	/* Hardware mandated delay */
 	udelay(5);
 
-	hw = devm_clk_hw_register_fixed_factor_index(dev, "sys_apcs_aux", 0, 0, 1, 2);
+	/*
+	 * Register the clock as fixed rate instead of being a child of gpll0
+	 * to let the driver register probe as early as possible.
+	 */
+	hw = devm_clk_hw_register_fixed_rate(dev, "sys_apcs_aux", NULL, 0, 300000000);
 	if (IS_ERR(hw))
 		return PTR_ERR(hw);
 
