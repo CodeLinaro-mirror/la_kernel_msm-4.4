@@ -502,14 +502,13 @@ static void qcom_cpu_clk_msm8996_acd_init(struct regmap *regmap)
 	kryo_l2_set_indirect_reg(L2ACDDVMRC_REG, 0x000e0f0f);
 	kryo_l2_set_indirect_reg(L2ACDSSCR_REG, 0x00000601);
 
+	kryo_l2_set_indirect_reg(L2ACDCR_REG, 0x002c5ffd);
+
 	hwid = read_cpuid_mpidr();
-	if ((hwid & CPU_CLUSTER_AFFINITY_MASK) == PWRCL_AFFINITY_MASK) {
+	if ((hwid & CPU_CLUSTER_AFFINITY_MASK) == PWRCL_AFFINITY_MASK)
 		regmap_write(regmap, PWRCL_REG_OFFSET + SSSCTL_OFFSET, 0xf);
-		kryo_l2_set_indirect_reg(L2ACDCR_REG, 0x002c5ffd);
-	} else {
-		kryo_l2_set_indirect_reg(L2ACDCR_REG, 0x002c5ffd);
+	else
 		regmap_write(regmap, PERFCL_REG_OFFSET + SSSCTL_OFFSET, 0xf);
-	}
 
 out:
 	spin_unlock_irqrestore(&qcom_clk_acd_lock, flags);
