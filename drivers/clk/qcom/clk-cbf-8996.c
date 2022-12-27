@@ -215,8 +215,6 @@ static const struct regmap_config cbf_msm8996_regmap_config = {
 	.val_format_endian	= REGMAP_ENDIAN_LITTLE,
 };
 
-#define AUTO_CLK_SEL_ALWAYS_ON_MASK GENMASK(5, 4)
-
 static int qcom_msm8996_cbf_probe(struct platform_device *pdev)
 {
 	void __iomem *base;
@@ -232,6 +230,21 @@ static int qcom_msm8996_cbf_probe(struct platform_device *pdev)
 	if (IS_ERR(regmap))
 		return PTR_ERR(regmap);
 
+	/* Select GPLL0 for 300MHz for the CBF clock */
+	regmap_write(regmap, CBF_MUX_OFFSET, 0x3);
+
+	/* Ensure write goes through before PLLs are reconfigured */
+	udelay(5);
+
+	clk_alpha_pll_configure(&cbf_pll, regmap, &cbfpll_config);
+
+	/* Wait for PLL(s) to lock */
+        udelay(50);
+
+	/* Switch CBF to use the primary PLL */
+	regmap_update_bits(regmap, CBF_MUX_OFFSET,
+			   CBF_MUX_PARENT_MASK, 0x1);
+
 	for (i = 0; i < ARRAY_SIZE(cbf_msm8996_hw_clks); i++) {
 		ret = devm_clk_hw_register(dev, cbf_msm8996_hw_clks[i]);
 		if (ret)
@@ -243,10 +256,6 @@ static int qcom_msm8996_cbf_probe(struct platform_device *pdev)
 		if (ret)
 			return ret;
 	}
-
-	clk_alpha_pll_configure(&cbf_pll, regmap, &cbfpll_config);
-	clk_set_rate(cbf_pll.clkr.hw.clk, 614400000);
-	clk_prepare_enable(cbf_pll.clkr.hw.clk);
 
 	ret = devm_clk_notifier_register(dev, cbf_mux.clkr.hw.clk, &cbf_mux.nb);
 	if (ret)
