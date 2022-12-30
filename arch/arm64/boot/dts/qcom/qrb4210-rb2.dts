@@ -258,8 +258,11 @@
 	 *
 	 * Note that since the USB - C type can be used only in peripehral mode,
 	 * so hardcoding the mode to 'peripheral' here makes sense.
+	 *
+	 * However since we want to use the EUD debug device, we set the mode as
+	 * 'otg' here.
 	 */
-	dr_mode = "peripheral";
+	dr_mode = "otg";
 };
 
 &usb_hsphy {
