@@ -9,9 +9,6 @@ title: LPASS(Low Power Audio Subsystem) VA Macro audio codec
 maintainers:
   - Srinivas Kandagatla <srinivas.kandagatla@linaro.org>
 
-allOf:
-  - $ref: dai-common.yaml#
-
 properties:
   compatible:
     enum:
@@ -63,6 +60,8 @@ required:
   - clocks
 
 allOf:
+  - $ref: dai-common.yaml#
+
   - if:
       properties:
         compatible:
