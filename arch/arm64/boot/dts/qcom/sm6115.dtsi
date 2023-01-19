@@ -2125,6 +2125,13 @@
 			interrupts = <GIC_PPI 9 IRQ_TYPE_LEVEL_HIGH>;
 		};
 
+		watchdog@f017000 {
+			compatible = "qcom,apss-wdt-sm6115", "qcom,kpss-wdt";
+			reg = <0x0f017000 0x1000>;
+			clocks = <&sleep_clk>;
+			interrupts = <GIC_SPI 3 IRQ_TYPE_EDGE_RISING>;
+		};
+
 		cpufreq_hw: cpufreq@f521000 {
 			compatible = "qcom,cpufreq-hw";
 			reg = <0x0f521000 0x1000>, <0x0f523000 0x1000>;
