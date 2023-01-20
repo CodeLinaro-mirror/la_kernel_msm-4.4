@@ -39,6 +39,10 @@
 	clock-frequency = <32000>;
 };
 
+&qupv3_id_0 {
+	status = "okay";
+};
+
 &uart4 {
 	status = "okay";
 };
