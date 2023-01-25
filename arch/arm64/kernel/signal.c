@@ -280,7 +280,12 @@ static int restore_sve_fpsimd_context(struct user_ctxs *user)
 
 		vl = task_get_sme_vl(current);
 	} else {
-		if (!system_supports_sve())
+		/*
+		 * A SME only system use SVE for streaming mode so can
+		 * have a SVE formatted context with a zero VL and no
+		 * payload data.
+		 */
+		if (!system_supports_sve() && !system_supports_sme())
 			return -EINVAL;
 
 		vl = task_get_sve_vl(current);
@@ -729,7 +734,7 @@ static int setup_sigframe_layout(struct rt_sigframe_user_layout *user,
 			return err;
 	}
 
-	if (system_supports_sve()) {
+	if (system_supports_sve() || system_supports_sme()) {
 		unsigned int vq = 0;
 
 		if (add_all || test_thread_flag(TIF_SVE) ||
@@ -1103,7 +1108,7 @@ static void do_signal(struct pt_regs *regs)
 void do_notify_resume(struct pt_regs *regs, unsigned long thread_flags)
 {
 	do {
-		if (thread_flags & _TIF_NEED_RESCHED) {
+		if (thread_flags & _TIF_NEED_RESCHED_MASK) {
 			/* Unmask Debug and SError for the next task */
 			local_daif_restore(DAIF_PROCCTX_NOIRQ);
 
