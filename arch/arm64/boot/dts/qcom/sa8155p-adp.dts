@@ -19,6 +19,7 @@
 
 	aliases {
 		serial0 = &uart2;
+		serial1 = &uart9;
 	};
 
 	chosen {
@@ -72,6 +73,10 @@
 			snps,priority = <0x0>;
 		};
 	};
+};
+
+&uart9 {
+	status = "okay";
 };
 
 &apps_rsc {
