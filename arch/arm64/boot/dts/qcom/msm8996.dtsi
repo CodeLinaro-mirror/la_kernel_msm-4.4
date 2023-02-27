@@ -1313,6 +1313,10 @@
 
 			#cooling-cells = <2>;
 
+			gpu_warm: warming {
+				#cooling-cells = <2>;
+			};
+
 			gpu_opp_table: opp-table {
 				compatible  ="operating-points-v2";
 
@@ -3777,6 +3781,7 @@
 							 <&CPU1_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&CPU2_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&CPU3_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&gpu_warm THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&pd_cx_cooling THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&pd_mx_cooling THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
@@ -3816,6 +3821,7 @@
 							 <&CPU1_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&CPU2_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&CPU3_WARM THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&gpu_warm THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&pd_cx_cooling THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 							 <&pd_mx_cooling THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 				};
