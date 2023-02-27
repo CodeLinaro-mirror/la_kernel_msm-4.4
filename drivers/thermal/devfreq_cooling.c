@@ -48,14 +48,18 @@
  */
 struct devfreq_cooling_device {
 	struct thermal_cooling_device *cdev;
+	struct thermal_cooling_device *warm_cdev;
 	struct devfreq *devfreq;
 	unsigned long cooling_state;
+	unsigned long warming_state;
 	u32 *freq_table;
 	size_t max_state;
 	struct devfreq_cooling_power *power_ops;
 	u32 res_util;
 	int capped_state;
+	bool has_warming;
 	struct dev_pm_qos_request req_max_freq;
+	struct dev_pm_qos_request req_min_freq;
 	struct em_perf_domain *em_pd;
 };
 
@@ -107,6 +111,43 @@ static int devfreq_cooling_set_cur_state(struct thermal_cooling_device *cdev,
 				  DIV_ROUND_UP(freq, HZ_PER_KHZ));
 
 	dfc->cooling_state = state;
+
+	return 0;
+}
+
+static int devfreq_warming_get_cur_state(struct thermal_cooling_device *cdev,
+					 unsigned long *state)
+{
+	struct devfreq_cooling_device *dfc = cdev->devdata;
+
+	*state = dfc->warming_state;
+
+	return 0;
+}
+
+static int devfreq_warming_set_cur_state(struct thermal_cooling_device *cdev,
+					 unsigned long state)
+{
+	struct devfreq_cooling_device *dfc = cdev->devdata;
+	struct devfreq *df = dfc->devfreq;
+	struct device *dev = df->dev.parent;
+	unsigned long freq;
+
+	dev_info(dev, "Setting warming state %lu\n", state);
+	if (state == dfc->warming_state)
+		return 0;
+
+	dev_info(dev, "Setting warming state %lu\n", state);
+
+	if (state > dfc->max_state)
+		return -EINVAL;
+
+	freq = dfc->freq_table[dfc->max_state - state];
+
+	dev_pm_qos_update_request(&dfc->req_min_freq,
+				  DIV_ROUND_UP(freq, HZ_PER_KHZ));
+
+	dfc->warming_state = state;
 
 	return 0;
 }
@@ -296,6 +337,12 @@ static struct thermal_cooling_device_ops devfreq_cooling_ops = {
 	.set_cur_state = devfreq_cooling_set_cur_state,
 };
 
+static struct thermal_cooling_device_ops devfreq_warming_ops = {
+	.get_max_state = devfreq_cooling_get_max_state,
+	.get_cur_state = devfreq_warming_get_cur_state,
+	.set_cur_state = devfreq_warming_set_cur_state,
+};
+
 /**
  * devfreq_cooling_gen_tables() - Generate frequency table.
  * @dfc:	Pointer to devfreq cooling device.
@@ -355,10 +402,11 @@ struct thermal_cooling_device *
 of_devfreq_cooling_register_power(struct device_node *np, struct devfreq *df,
 				  struct devfreq_cooling_power *dfc_power)
 {
-	struct thermal_cooling_device *cdev;
+	struct thermal_cooling_device *cdev, *warm_cdev;
 	struct device *dev = df->dev.parent;
 	struct devfreq_cooling_device *dfc;
 	struct thermal_cooling_device_ops *ops;
+	struct device_node *warm_np;
 	char *name;
 	int err, num_opps;
 
@@ -427,6 +475,38 @@ of_devfreq_cooling_register_power(struct device_node *np, struct devfreq *df,
 
 	dfc->cdev = cdev;
 
+	if (np &&
+	    ((warm_np = of_get_child_by_name(np, "warming")) != NULL) &&
+	    of_find_property(warm_np, "#cooling-cells", NULL)) {
+		err = dev_pm_qos_add_request(dev, &dfc->req_min_freq,
+					     DEV_PM_QOS_MIN_FREQUENCY,
+					     PM_QOS_MIN_FREQUENCY_DEFAULT_VALUE);
+		if (err < 0)
+			goto out;
+
+		name = kasprintf(GFP_KERNEL, "devfreq-%s-warm", dev_name(dev));
+		if (!name) {
+			dev_pm_qos_remove_request(&dfc->req_min_freq);
+			goto out;
+		}
+
+		warm_cdev = thermal_of_cooling_device_register(warm_np, name, dfc, &devfreq_warming_ops);
+		kfree(name);
+
+		if (IS_ERR(warm_cdev)) {
+			err = PTR_ERR(warm_cdev);
+			dev_err(dev,
+				"Failed to register devfreq warming device (%d)\n",
+				err);
+			dev_pm_qos_remove_request(&dfc->req_min_freq);
+			goto out;
+		}
+
+		dfc->warm_cdev = warm_cdev;
+		dfc->has_warming = true;
+	}
+
+out:
 	return cdev;
 
 remove_qos_req:
@@ -530,6 +610,11 @@ void devfreq_cooling_unregister(struct thermal_cooling_device *cdev)
 
 	thermal_cooling_device_unregister(dfc->cdev);
 	dev_pm_qos_remove_request(&dfc->req_max_freq);
+
+	if (dfc->has_warming) {
+		thermal_cooling_device_unregister(dfc->warm_cdev);
+		dev_pm_qos_remove_request(&dfc->req_min_freq);
+	}
 
 	em_dev_unregister_perf_domain(dev);
 
