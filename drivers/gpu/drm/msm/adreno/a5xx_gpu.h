@@ -46,8 +46,7 @@ struct a5xx_gpu {
 	bool has_whereami;
 
 	struct device *gxpd;
-	struct device *mxpd;
-	struct device *cprpd;
+	struct device_link *mx_link;
 };
 
 #define to_a5xx_gpu(x) container_of(x, struct a5xx_gpu, base)

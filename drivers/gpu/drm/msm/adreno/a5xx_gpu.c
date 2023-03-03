@@ -1053,6 +1053,9 @@ static void a5xx_destroy(struct msm_gpu *gpu)
 
 	adreno_gpu_cleanup(adreno_gpu);
 
+	if (a5xx_gpu->mx_link)
+		device_link_del(a5xx_gpu->mx_link);
+
 	if (a5xx_gpu->gxpd)
 		dev_pm_domain_detach(a5xx_gpu->gxpd, true);
 
@@ -1792,6 +1795,7 @@ struct msm_gpu *a5xx_gpu_init(struct drm_device *dev)
 	 * If the device has several power domain (gx and cpr3), none are attached by the core.
 	 */
 	if (!pdev->dev.pm_domain) {
+		struct device **opp_virt_dev;
 		struct device *pd;
 		static const char *cpr_genpd_names[] = { "cpr", "mx", NULL };
 
@@ -1806,11 +1810,18 @@ struct msm_gpu *a5xx_gpu_init(struct drm_device *dev)
 
 		a5xx_gpu->gxpd = pd;
 
-		ret = devm_pm_opp_attach_genpd(&pdev->dev, cpr_genpd_names, NULL);
+		ret = devm_pm_opp_attach_genpd(&pdev->dev, cpr_genpd_names, &opp_virt_dev);
 		if (ret) {
 			dev_pm_domain_detach(a5xx_gpu->gxpd, true);
 			return ERR_PTR(ret);
 		}
+
+		a5xx_gpu->mx_link = device_link_add(&pdev->dev, opp_virt_dev[1],
+						    DL_FLAG_RPM_ACTIVE |
+						    DL_FLAG_PM_RUNTIME |
+						    DL_FLAG_STATELESS);
+		if (!a5xx_gpu->mx_link)
+			return ERR_PTR(-ENODEV);
 	}
 
 	check_speed_bin(&pdev->dev);
