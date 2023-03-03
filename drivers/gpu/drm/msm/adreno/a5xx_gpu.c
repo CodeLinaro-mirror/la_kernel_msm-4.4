@@ -1802,7 +1802,7 @@ struct msm_gpu *a5xx_gpu_init(struct drm_device *dev)
 
 		/* GX is required for GPU to function */
 		if (pd == NULL)
-			return -EINVAL;
+			return ERR_PTR(-EINVAL);
 
 		a5xx_gpu->gxpd = pd;
 
