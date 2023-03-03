@@ -1800,6 +1800,10 @@ struct msm_gpu *a5xx_gpu_init(struct drm_device *dev)
 			return ERR_CAST(pd);
 		}
 
+		/* GX is required for GPU to function */
+		if (pd == NULL)
+			return -EINVAL;
+
 		a5xx_gpu->gxpd = pd;
 
 		ret = devm_pm_opp_attach_genpd(&pdev->dev, cpr_genpd_names, NULL);
