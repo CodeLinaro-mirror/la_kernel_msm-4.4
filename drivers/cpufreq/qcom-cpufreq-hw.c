@@ -390,7 +390,16 @@ static irqreturn_t qcom_lmh_dcvs_handle_irq(int irq, void *data)
 
 	/* Disable interrupt and enable polling */
 	disable_irq_nosync(c_data->throttle_irq);
-	schedule_delayed_work(&c_data->throttle_work, 0);
+
+	/*
+	 * Workqueue prefers local CPUs and since interrupts have set affinity,
+	 * the work might execute on a CPU dedicated to realtime tasks.
+	 */
+	if (IS_ENABLED(CONFIG_PREEMPT_RT))
+		queue_delayed_work_on(WORK_CPU_UNBOUND, system_unbound_wq,
+				      &c_data->throttle_work, 0);
+	else
+		schedule_delayed_work(&c_data->throttle_work, 0);
 
 	if (qcom_cpufreq.soc_data->reg_intr_clr)
 		writel_relaxed(GT_IRQ_STATUS,
