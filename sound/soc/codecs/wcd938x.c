@@ -77,6 +77,8 @@
 #define WCD938X_MBHC_MOISTURE_RREF      R_24_KOHM
 #define WCD_MBHC_HS_V_MAX           1600
 
+#define WCD938X_ENUM_TIMEOUT_MS		500
+
 #define WCD938X_EAR_PA_GAIN_TLV(xname, reg, shift, max, invert, tlv_array) \
 {	.iface = SNDRV_CTL_ELEM_IFACE_MIXER, .name = xname, \
 	.access = SNDRV_CTL_ELEM_ACCESS_TLV_READ |\
@@ -4424,6 +4426,15 @@ static int wcd938x_bind(struct device *dev)
 
 	wcd938x->sdw_priv[AIF1_PB]->slave_irq = wcd938x->virq;
 	wcd938x->sdw_priv[AIF1_CAP]->slave_irq = wcd938x->virq;
+
+	/*
+	 * Before any TX slave regmap usage, be sure the TX slave is actually
+	 * enumerated.
+	 */
+	ret = wait_for_completion_timeout(&wcd938x->tx_sdw_dev->enumeration_complete,
+					  msecs_to_jiffies(WCD938X_ENUM_TIMEOUT_MS));
+	if (!ret)
+		dev_warn(dev, "Enumeration timeout in bind, possible failures in accessing registers\n");
 
 	ret = wcd938x_set_micbias_data(wcd938x);
 	if (ret < 0) {
