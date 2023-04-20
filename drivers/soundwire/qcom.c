@@ -19,6 +19,7 @@
 #include <linux/slimbus.h>
 #include <linux/soundwire/sdw.h>
 #include <linux/soundwire/sdw_registers.h>
+#include <linux/workqueue.h>
 #include <sound/pcm_params.h>
 #include <sound/soc.h>
 #include "bus.h"
@@ -187,6 +188,7 @@ struct qcom_swrm_ctrl {
 #endif
 	struct completion broadcast;
 	struct completion enumeration;
+	struct delayed_work new_slave_work;
 	/* Port alloc/free lock */
 	struct mutex port_lock;
 	struct clk *hclk;
@@ -606,6 +608,37 @@ static int qcom_swrm_enumerate(struct sdw_bus *bus)
 	return 0;
 }
 
+static void qcom_swrm_new_slave(struct work_struct *work)
+{
+	struct qcom_swrm_ctrl *ctrl = container_of(work, struct qcom_swrm_ctrl,
+						   new_slave_work.work);
+
+	/*
+	 * All Soundwire slave deviecs are expected to be in reset state (powered down)
+	 * during sdw_bus_master_add().  The slave device should be brougth
+	 * from reset by its probe() or bind() function, as a result of
+	 * sdw_bus_master_add().
+	 * Add a simple check to avoid NULL pointer except on early interrupts.
+	 * Note that if this condition happens, the slave device will not be
+	 * enumerated. Its driver should be fixed.
+	 *
+	 * smp_load_acquire() paired with sdw_master_device_add().
+	 */
+	if (!smp_load_acquire(&ctrl->bus.md)) {
+		dev_err(ctrl->dev,
+			"Got unexpected, early interrupt, device will not be enumerated\n");
+		return;
+	}
+
+	clk_prepare_enable(ctrl->hclk);
+
+	qcom_swrm_get_device_status(ctrl);
+	qcom_swrm_enumerate(&ctrl->bus);
+	sdw_handle_slave_status(&ctrl->bus, ctrl->status);
+
+	clk_disable_unprepare(ctrl->hclk);
+};
+
 static irqreturn_t qcom_swrm_wake_irq_handler(int irq, void *dev_id)
 {
 	struct qcom_swrm_ctrl *ctrl = dev_id;
@@ -668,9 +701,17 @@ static irqreturn_t qcom_swrm_irq_handler(int irq, void *dev_id)
 					dev_dbg(ctrl->dev, "Slave status not changed %x\n",
 						slave_status);
 				} else {
-					qcom_swrm_get_device_status(ctrl);
-					qcom_swrm_enumerate(&ctrl->bus);
-					sdw_handle_slave_status(&ctrl->bus, ctrl->status);
+					unsigned long delay = 0;
+
+					/*
+					 * See qcom_swrm_new_slave() for
+					 * explanation. smp_load_acquire() paired
+					 * with sdw_master_device_add().
+					 */
+					if (!smp_load_acquire(&ctrl->bus.md))
+						delay = 10;
+					schedule_delayed_work(&ctrl->new_slave_work,
+							      delay);
 				}
 				break;
 			case SWRM_INTERRUPT_STATUS_MASTER_CLASH_DET:
@@ -780,6 +821,7 @@ static int qcom_swrm_init(struct qcom_swrm_ctrl *ctrl)
 
 	ctrl->intr_mask = SWRM_INTERRUPT_STATUS_RMSK;
 	/* Mask soundwire interrupts */
+
 	if (ctrl->version < SWRM_VERSION_2_0_0)
 		ctrl->reg_write(ctrl, ctrl->reg_layout[SWRM_REG_INTERRUPT_MASK_ADDR],
 				SWRM_INTERRUPT_STATUS_RMSK);
@@ -1485,6 +1527,7 @@ static int qcom_swrm_probe(struct platform_device *pdev)
 	mutex_init(&ctrl->port_lock);
 	init_completion(&ctrl->broadcast);
 	init_completion(&ctrl->enumeration);
+	INIT_DELAYED_WORK(&ctrl->new_slave_work, qcom_swrm_new_slave);
 
 	ctrl->bus.ops = &qcom_swrm_ops;
 	ctrl->bus.port_ops = &qcom_swrm_port_ops;
@@ -1514,26 +1557,15 @@ static int qcom_swrm_probe(struct platform_device *pdev)
 
 	ctrl->reg_read(ctrl, SWRM_COMP_HW_VERSION, &ctrl->version);
 
+	qcom_swrm_init(ctrl);
+
 	ret = devm_request_threaded_irq(dev, ctrl->irq, NULL,
 					qcom_swrm_irq_handler,
-					IRQF_TRIGGER_RISING |
 					IRQF_ONESHOT,
 					"soundwire", ctrl);
 	if (ret) {
 		dev_err(dev, "Failed to request soundwire irq\n");
 		goto err_clk;
-	}
-
-	ctrl->wake_irq = of_irq_get(dev->of_node, 1);
-	if (ctrl->wake_irq > 0) {
-		ret = devm_request_threaded_irq(dev, ctrl->wake_irq, NULL,
-						qcom_swrm_wake_irq_handler,
-						IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
-						"swr_wake_irq", ctrl);
-		if (ret) {
-			dev_err(dev, "Failed to request soundwire wake irq\n");
-			goto err_init;
-		}
 	}
 
 	pm_runtime_set_autosuspend_delay(dev, 3000);
@@ -1549,7 +1581,18 @@ static int qcom_swrm_probe(struct platform_device *pdev)
 		goto err_clk;
 	}
 
-	qcom_swrm_init(ctrl);
+	ctrl->wake_irq = of_irq_get(dev->of_node, 1);
+	if (ctrl->wake_irq > 0) {
+		ret = devm_request_threaded_irq(dev, ctrl->wake_irq, NULL,
+						qcom_swrm_wake_irq_handler,
+						IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
+						"swr_wake_irq", ctrl);
+		if (ret) {
+			dev_err(dev, "Failed to request soundwire wake irq\n");
+			goto err_init;
+		}
+	}
+
 	wait_for_completion_timeout(&ctrl->enumeration,
 				    msecs_to_jiffies(TIMEOUT_MS));
 	ret = qcom_swrm_register_dais(ctrl);
@@ -1589,6 +1632,18 @@ static int qcom_swrm_remove(struct platform_device *pdev)
 {
 	struct qcom_swrm_ctrl *ctrl = dev_get_drvdata(&pdev->dev);
 
+	/*
+	 * Mask interrupts to be sure no delayed work can be scheduler after
+	 * removing Soundwire bus master.
+	 */
+	if (ctrl->version < SWRM_VERSION_2_0_0)
+		ctrl->reg_write(ctrl, ctrl->reg_layout[SWRM_REG_INTERRUPT_MASK_ADDR],
+				0);
+	if (ctrl->mmio)
+		ctrl->reg_write(ctrl, ctrl->reg_layout[SWRM_REG_INTERRUPT_CPU_EN],
+				0);
+
+	cancel_delayed_work_sync(&ctrl->new_slave_work);
 	sdw_bus_master_delete(&ctrl->bus);
 	clk_disable_unprepare(ctrl->hclk);
 
