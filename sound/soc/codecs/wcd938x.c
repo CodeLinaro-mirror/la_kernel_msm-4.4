@@ -4236,7 +4236,8 @@ static int wcd938x_populate_dt_data(struct wcd938x_priv *wcd938x, struct device 
 	struct wcd_mbhc_config *cfg = &wcd938x->mbhc_cfg;
 	int ret;
 
-	wcd938x->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_ASIS);
+	/* Keep device in reset status till wcd938x_bind() */
+	wcd938x->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
 	ret = PTR_ERR_OR_ZERO(wcd938x->reset_gpio);
 	if (ret)
 		return dev_err_probe(dev, ret, "Failed to get reset gpio\n");
@@ -4407,6 +4408,8 @@ static int wcd938x_bind(struct device *dev)
 		return -EINVAL;
 	}
 
+	wcd938x_reset(wcd938x);
+
 	wcd938x->regmap = devm_regmap_init_sdw(wcd938x->tx_sdw_dev, &wcd938x_regmap_config);
 	if (IS_ERR(wcd938x->regmap)) {
 		dev_err(dev, "%s: tx csr regmap not found\n", __func__);
@@ -4507,8 +4510,6 @@ static int wcd938x_probe(struct platform_device *pdev)
 	ret = wcd938x_add_slave_components(wcd938x, dev, &match);
 	if (ret)
 		return ret;
-
-	wcd938x_reset(wcd938x);
 
 	ret = component_master_add_with_match(dev, &wcd938x_comp_ops, match);
 	if (ret)
