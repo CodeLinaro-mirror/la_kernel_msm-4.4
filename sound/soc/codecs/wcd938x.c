@@ -6,12 +6,14 @@
 #include <linux/platform_device.h>
 #include <linux/device.h>
 #include <linux/delay.h>
+#include <linux/err.h>
 #include <linux/gpio/consumer.h>
+#include <linux/irq.h>
+#include <linux/irqdomain.h>
 #include <linux/kernel.h>
 #include <linux/pm_runtime.h>
 #include <linux/component.h>
 #include <sound/tlv.h>
-#include <linux/of_gpio.h>
 #include <linux/of.h>
 #include <sound/jack.h>
 #include <sound/pcm.h>
@@ -74,6 +76,8 @@
 #define WCD938X_MBHC_ZDET_CONST         (86 * 16384)
 #define WCD938X_MBHC_MOISTURE_RREF      R_24_KOHM
 #define WCD_MBHC_HS_V_MAX           1600
+
+#define WCD938X_ENUM_TIMEOUT_MS		500
 
 #define WCD938X_EAR_PA_GAIN_TLV(xname, reg, shift, max, invert, tlv_array) \
 {	.iface = SNDRV_CTL_ELEM_IFACE_MIXER, .name = xname, \
@@ -194,7 +198,7 @@ struct wcd938x_priv {
 	int flyback_cur_det_disable;
 	int ear_rx_path;
 	int variant;
-	int reset_gpio;
+	struct gpio_desc *reset_gpio;
 	struct gpio_desc *us_euro_gpio;
 	u32 micb1_mv;
 	u32 micb2_mv;
@@ -4234,19 +4238,17 @@ static int wcd938x_populate_dt_data(struct wcd938x_priv *wcd938x, struct device 
 	struct wcd_mbhc_config *cfg = &wcd938x->mbhc_cfg;
 	int ret;
 
-	wcd938x->reset_gpio = of_get_named_gpio(dev->of_node, "reset-gpios", 0);
-	if (wcd938x->reset_gpio < 0) {
-		dev_err(dev, "Failed to get reset gpio: err = %d\n",
-			wcd938x->reset_gpio);
-		return wcd938x->reset_gpio;
-	}
+	/* Keep device in reset status till wcd938x_bind() */
+	wcd938x->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
+	ret = PTR_ERR_OR_ZERO(wcd938x->reset_gpio);
+	if (ret)
+		return dev_err_probe(dev, ret, "Failed to get reset gpio\n");
 
 	wcd938x->us_euro_gpio = devm_gpiod_get_optional(dev, "us-euro",
 						GPIOD_OUT_LOW);
-	if (IS_ERR(wcd938x->us_euro_gpio)) {
-		dev_err(dev, "us-euro swap Control GPIO not found\n");
-		return PTR_ERR(wcd938x->us_euro_gpio);
-	}
+	ret = PTR_ERR_OR_ZERO(wcd938x->us_euro_gpio);
+	if (ret)
+		return dev_err_probe(dev, ret, "us-euro swap Control GPIO not found\n");
 
 	cfg->swap_gnd_mic = wcd938x_swap_gnd_mic;
 
@@ -4256,16 +4258,12 @@ static int wcd938x_populate_dt_data(struct wcd938x_priv *wcd938x, struct device 
 	wcd938x->supplies[3].supply = "vdd-mic-bias";
 
 	ret = regulator_bulk_get(dev, WCD938X_MAX_SUPPLY, wcd938x->supplies);
-	if (ret) {
-		dev_err(dev, "Failed to get supplies: err = %d\n", ret);
-		return ret;
-	}
+	if (ret)
+		return dev_err_probe(dev, ret, "Failed to get supplies\n");
 
 	ret = regulator_bulk_enable(WCD938X_MAX_SUPPLY, wcd938x->supplies);
-	if (ret) {
-		dev_err(dev, "Failed to enable supplies: err = %d\n", ret);
-		return ret;
-	}
+	if (ret)
+		return dev_err_probe(dev, ret, "Failed to enable supplies\n");
 
 	wcd938x_dt_parse_micbias_info(dev, wcd938x);
 
@@ -4285,11 +4283,11 @@ static int wcd938x_populate_dt_data(struct wcd938x_priv *wcd938x, struct device 
 
 static int wcd938x_reset(struct wcd938x_priv *wcd938x)
 {
-	gpio_direction_output(wcd938x->reset_gpio, 0);
-	/* 20us sleep required after pulling the reset gpio to LOW */
+	gpiod_set_value_cansleep(wcd938x->reset_gpio, 1);
+	/* 20us sleep required after asserting the reset gpio */
 	usleep_range(20, 30);
-	gpio_set_value(wcd938x->reset_gpio, 1);
-	/* 20us sleep required after pulling the reset gpio to HIGH */
+	gpiod_set_value_cansleep(wcd938x->reset_gpio, 0);
+	/* 20us sleep required after releasing the reset gpio */
 	usleep_range(20, 30);
 
 	return 0;
@@ -4412,6 +4410,8 @@ static int wcd938x_bind(struct device *dev)
 		return -EINVAL;
 	}
 
+	wcd938x_reset(wcd938x);
+
 	wcd938x->regmap = devm_regmap_init_sdw(wcd938x->tx_sdw_dev, &wcd938x_regmap_config);
 	if (IS_ERR(wcd938x->regmap)) {
 		dev_err(dev, "%s: tx csr regmap not found\n", __func__);
@@ -4426,6 +4426,15 @@ static int wcd938x_bind(struct device *dev)
 
 	wcd938x->sdw_priv[AIF1_PB]->slave_irq = wcd938x->virq;
 	wcd938x->sdw_priv[AIF1_CAP]->slave_irq = wcd938x->virq;
+
+	/*
+	 * Before any TX slave regmap usage, be sure the TX slave is actually
+	 * enumerated.
+	 */
+	ret = wait_for_completion_timeout(&wcd938x->tx_sdw_dev->enumeration_complete,
+					  msecs_to_jiffies(WCD938X_ENUM_TIMEOUT_MS));
+	if (!ret)
+		dev_warn(dev, "Enumeration timeout in bind, possible failures in accessing registers\n");
 
 	ret = wcd938x_set_micbias_data(wcd938x);
 	if (ret < 0) {
@@ -4512,8 +4521,6 @@ static int wcd938x_probe(struct platform_device *pdev)
 	ret = wcd938x_add_slave_components(wcd938x, dev, &match);
 	if (ret)
 		return ret;
-
-	wcd938x_reset(wcd938x);
 
 	ret = component_master_add_with_match(dev, &wcd938x_comp_ops, match);
 	if (ret)

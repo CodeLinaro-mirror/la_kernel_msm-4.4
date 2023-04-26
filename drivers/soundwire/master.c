@@ -161,7 +161,12 @@ int sdw_master_device_add(struct sdw_bus *bus, struct device *parent,
 	/* add shortcuts to improve code readability/compactness */
 	md->bus = bus;
 	bus->dev = &md->dev;
-	bus->md = md;
+	/*
+	 * Make sure the contents of md is stored before storing bus->md.
+	 * Paired with new slave attached and slave status interrupts
+	 * on the Soundwire master side.
+	 */
+	smp_store_release(&bus->md, md);
 
 	pm_runtime_set_autosuspend_delay(&bus->md->dev, SDW_MASTER_SUSPEND_DELAY_MS);
 	pm_runtime_use_autosuspend(&bus->md->dev);
