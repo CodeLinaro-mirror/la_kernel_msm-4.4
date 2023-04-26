@@ -45,6 +45,8 @@ description: |
         msm8996
         msm8998
         qcs404
+        qcm2290
+        qrb2210
         qdu1000
         qru1000
         sa8155p
@@ -338,6 +340,12 @@ properties:
           - const: swir,mangoh-green-wp8548
           - const: swir,wp8548
           - const: qcom,mdm9615
+
+      - items:
+          - enum:
+              - qcom,qrb2210-rb1
+          - const: qcom,qrb2210
+          - const: qcom,qcm2290
 
       - description: Qualcomm Technologies, Inc. Distributed Unit 1000 platform
         items:
