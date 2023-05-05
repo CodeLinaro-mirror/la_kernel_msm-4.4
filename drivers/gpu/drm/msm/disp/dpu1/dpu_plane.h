@@ -33,9 +33,12 @@ struct dpu_plane_state {
 	struct msm_gem_address_space *aspace;
 	enum dpu_stage stage;
 	bool needs_qos_remap;
-	uint32_t multirect_index;
-	uint32_t multirect_mode;
 	bool pending;
+
+	struct dpu_sw_pipe pipe;
+	struct dpu_sw_pipe r_pipe;
+	struct dpu_hw_pipe_cfg pipe_cfg;
+	struct dpu_hw_pipe_cfg r_pipe_cfg;
 
 	u64 plane_fetch_bw;
 	u64 plane_clk;
@@ -56,13 +59,6 @@ struct dpu_multirect_plane_states {
 
 #define to_dpu_plane_state(x) \
 	container_of(x, struct dpu_plane_state, base)
-
-/**
- * dpu_plane_pipe - return sspp identifier for the given plane
- * @plane:   Pointer to DRM plane object
- * Returns: sspp identifier of the given plane
- */
-enum dpu_sspp dpu_plane_pipe(struct drm_plane *plane);
 
 /**
  * dpu_plane_flush - final plane operations before commit flush
@@ -94,12 +90,6 @@ struct drm_plane *dpu_plane_init(struct drm_device *dev,
  * @plane: drm plate states of the multirect pair
  */
 int dpu_plane_validate_multirect_v2(struct dpu_multirect_plane_states *plane);
-
-/**
- * dpu_plane_clear_multirect - clear multirect bits for the given pipe
- * @drm_state: Pointer to DRM plane state
- */
-void dpu_plane_clear_multirect(const struct drm_plane_state *drm_state);
 
 /**
  * dpu_plane_color_fill - enables color fill on plane
