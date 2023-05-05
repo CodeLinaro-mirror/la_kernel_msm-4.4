@@ -328,6 +328,7 @@ allOf:
         compatible:
           contains:
             enum:
+              - qcom,sdm630-dsi-ctrl
               - qcom,sdm660-dsi-ctrl
     then:
       properties:
