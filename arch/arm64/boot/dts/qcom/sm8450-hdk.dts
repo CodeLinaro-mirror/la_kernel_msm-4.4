@@ -22,10 +22,11 @@
 
 	aliases {
 		serial0 = &uart7;
+		serial1 = &uart20;
 	};
 
 	wcd938x: audio-codec {
-		compatible = "qcom,wcd9380-codec";
+		compatible = "qcom,wcd9385-codec";
 
 		pinctrl-names = "default";
 		pinctrl-0 = <&wcd_default>;
@@ -87,6 +88,31 @@
 		enable-active-high;
 	};
 
+	pmic-glink {
+		compatible = "qcom,sm8450-pmic-glink", "qcom,pmic-glink";
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		connector@0 {
+			compatible = "usb-c-connector";
+			reg = <0>;
+			power-role = "dual";
+			data-role = "dual";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				port@0 {
+					reg = <0>;
+					pmic_glink_dwc3_in: endpoint {
+						remote-endpoint = <&usb_1_dwc3_out>;
+					};
+				};
+			};
+		};
+	};
+
 	vph_pwr: vph-pwr-regulator {
 		compatible = "regulator-fixed";
 		regulator-name = "vph_pwr";
@@ -95,6 +121,24 @@
 
 		regulator-always-on;
 		regulator-boot-on;
+	};
+
+	wcn6856: wcn6856 {
+		compatible = "qcom,wcn6855";
+		#power-domain-cells = <0>;
+
+		vddaon-supply = <&vreg_s11b_0p95>;
+		vddcx-supply = <&vreg_s11b_0p95>;
+		vddmx-supply = <&vreg_s2e_0p85>;
+		vddrfa1-supply = <&vreg_s1c_1p86>;
+		vddrfa2-supply = <&vreg_s12b_1p25>;
+		vddio-supply = <&vreg_s10b_1p8>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&wlan_en_state &xo_clk_state>;
+
+		xo-clk-gpios = <&tlmm 204 GPIO_ACTIVE_HIGH>;
+		wlan-en-gpios = <&tlmm 80 GPIO_ACTIVE_HIGH>;
 	};
 };
 
@@ -215,7 +259,7 @@
 
 		vreg_s1c_1p86: smps1 {
 			regulator-name = "vreg_s1c_1p86";
-			regulator-min-microvolt = <1800000>;
+			regulator-min-microvolt = <1900000>;
 			regulator-max-microvolt = <2024000>;
 		};
 
@@ -368,7 +412,7 @@
 
 		vreg_s2e_0p85: smps2 {
 			regulator-name = "vreg_s2e_0p85";
-			regulator-min-microvolt = <500000>;
+			regulator-min-microvolt = <1012000>;
 			regulator-max-microvolt = <1040000>;
 		};
 
@@ -493,6 +537,8 @@
 	status = "okay";
 	vdda-phy-supply = <&vreg_l5b_0p88>;
 	vdda-pll-supply = <&vreg_l6b_1p2>;
+
+	power-domains = <&wcn6856>;
 };
 
 &pcie1 {
@@ -530,6 +576,10 @@
 };
 
 &qupv3_id_1 {
+	status = "okay";
+};
+
+&qupv3_id_2 {
 	status = "okay";
 };
 
@@ -677,6 +727,17 @@
 &tlmm {
 	gpio-reserved-ranges = <28 4>, <36 4>;
 
+	bt_en_state: bt-default-state {
+		bt-en {
+			pins = "gpio81";
+			function = "gpio";
+
+			drive-strength = <16>;
+			output-low;
+			bias-pull-up;
+		};
+	};
+
 	lt9611_irq_pin: lt9611-irq-state {
 		pins = "gpio44";
 		function = "gpio";
@@ -695,10 +756,44 @@
 		drive-strength = <2>;
 		bias-pull-up;
 	};
+
+	xo_clk_state: xo_clk_state {
+		pinconf {
+			pins = "gpio204";
+			function = "gpio";
+
+			drive-strength = <16>;
+			output-low;
+			bias-pull-down;
+		};
+	};
+
+	wlan_en_state: wlan_en_state {
+		pinconf {
+			pins = "gpio80";
+			function = "gpio";
+
+			drive-strength = <16>;
+			output-low;
+			bias-pull-down;
+		};
+	};
 };
 
 &uart7 {
 	status = "okay";
+};
+
+&uart20 {
+	status = "okay";
+	bluetooth {
+		/* a little lie */
+		compatible = "qcom,wcn6855-bt";
+		pinctrl-names = "default";
+		pinctrl-0 = <&bt_en_state>;
+		power-domains = <&wcn6856>;
+		enable-gpios = <&tlmm 81 GPIO_ACTIVE_HIGH>;
+	};
 };
 
 &ufs_mem_hc {
@@ -724,7 +819,14 @@
 };
 
 &usb_1_dwc3 {
-	dr_mode = "peripheral";
+	dr_mode = "otg";
+	usb-role-switch;
+
+	port {
+		usb_1_dwc3_out: endpoint {
+		      remote-endpoint = <&pmic_glink_dwc3_in>;
+	      };
+	};
 };
 
 &usb_1_hsphy {
@@ -755,7 +857,7 @@
 	spkr_1_sd_n_active: spkr-1-sd-n-active-state {
 		pins = "gpio1";
 		function = "gpio";
-		drive-strength = <4>;
+		drive-strength = <16>;
 		bias-disable;
 		output-low;
 	};
@@ -763,14 +865,16 @@
 	spkr_2_sd_n_active: spkr-2-sd-n-active-state {
 		pins = "gpio89";
 		function = "gpio";
-		drive-strength = <4>;
+		drive-strength = <16>;
 		bias-disable;
 		output-low;
 	};
 
-	wcd_default: wcd-default-state {
+	wcd_default: wcd-reset-n-active-state {
 		pins = "gpio43";
 		function = "gpio";
+		drive-strength = <16>;
 		bias-disable;
+		output-low;
 	};
 };
