@@ -593,16 +593,17 @@ static void fastrpc_mmap_free(struct fastrpc_mmap *map)
 		map->refs--;
 		if (!map->refs && !map->ctx_refs)
 			hlist_del_init(&map->hn);
-		spin_unlock(&me->hlock);
 	} else {
 		spin_lock(&fl->hlock);
 		map->refs--;
 		if (!map->refs && !map->ctx_refs)
 			hlist_del_init(&map->hn);
-		spin_unlock(&fl->hlock);
 	}
-	if (map->refs > 0)
+	if (map->refs > 0) {
+		spin_unlock(&me->hlock);
 		return;
+	}
+	spin_unlock(&me->hlock);
 	if (map->flags == ADSP_MMAP_HEAP_ADDR ||
 				map->flags == ADSP_MMAP_REMOTE_HEAP_ADDR) {
 		DEFINE_DMA_ATTRS(attrs);
