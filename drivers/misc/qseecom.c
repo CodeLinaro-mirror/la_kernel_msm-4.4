@@ -7140,16 +7140,13 @@ long qseecom_ioctl(struct file *file, unsigned cmd, unsigned long arg)
 		break;
 	}
 	case QSEECOM_IOCTL_RECEIVE_REQ: {
-		mutex_lock(&app_access_lock);
 		if ((data->listener.id == 0) ||
 			(data->type != QSEECOM_LISTENER_SERVICE)) {
 			pr_err("receive req: invalid handle (%d), lid(%d)\n",
 						data->type, data->listener.id);
-			mutex_unlock(&app_access_lock);
 			ret = -EINVAL;
 			break;
 		}
-		mutex_unlock(&app_access_lock);
 		atomic_inc(&data->ioctl_count);
 		ret = qseecom_receive_req(data);
 		atomic_dec(&data->ioctl_count);
@@ -7159,12 +7156,10 @@ long qseecom_ioctl(struct file *file, unsigned cmd, unsigned long arg)
 		break;
 	}
 	case QSEECOM_IOCTL_SEND_RESP_REQ: {
-		mutex_lock(&app_access_lock);
 		if ((data->listener.id == 0) ||
 			(data->type != QSEECOM_LISTENER_SERVICE)) {
 			pr_err("send resp req: invalid handle (%d), lid(%d)\n",
 						data->type, data->listener.id);
-			mutex_unlock(&app_access_lock);
 			ret = -EINVAL;
 			break;
 		}
@@ -7175,7 +7170,6 @@ long qseecom_ioctl(struct file *file, unsigned cmd, unsigned long arg)
 			ret = qseecom_reentrancy_send_resp(data);
 		atomic_dec(&data->ioctl_count);
 		wake_up_all(&data->abort_wq);
-		mutex_unlock(&app_access_lock);
 		if (ret)
 			pr_err("failed qseecom_send_resp: %d\n", ret);
 		break;
@@ -7539,12 +7533,10 @@ long qseecom_ioctl(struct file *file, unsigned cmd, unsigned long arg)
 	}
 	case QSEECOM_IOCTL_SEND_MODFD_RESP:
 	case QSEECOM_IOCTL_SEND_MODFD_RESP_64: {
-		mutex_lock(&app_access_lock);
 		if ((data->listener.id == 0) ||
 			(data->type != QSEECOM_LISTENER_SERVICE)) {
 			pr_err("receive req: invalid handle (%d), lid(%d)\n",
 						data->type, data->listener.id);
-			mutex_unlock(&app_access_lock);
 			ret = -EINVAL;
 			break;
 		}
@@ -7555,7 +7547,6 @@ long qseecom_ioctl(struct file *file, unsigned cmd, unsigned long arg)
 			ret = qseecom_send_modfd_resp_64(data, argp);
 		atomic_dec(&data->ioctl_count);
 		wake_up_all(&data->abort_wq);
-		mutex_unlock(&app_access_lock);
 		if (ret)
 			pr_err("failed qseecom_send_mod_resp: %d\n", ret);
 		__qseecom_clean_data_sglistinfo(data);
