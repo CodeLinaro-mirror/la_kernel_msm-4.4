@@ -1,4 +1,5 @@
 /* Copyright (c) 2008-2016,2018-2019,2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -460,6 +461,8 @@ struct kgsl_mem_entry * __must_check
 kgsl_sharedmem_find_id(struct kgsl_process_private *process, unsigned int id);
 
 extern const struct dev_pm_ops kgsl_pm_ops;
+
+unsigned long kgsl_get_align(struct kgsl_memdesc *memdesc);
 
 int kgsl_suspend_driver(struct platform_device *pdev, pm_message_t state);
 int kgsl_resume_driver(struct platform_device *pdev);
